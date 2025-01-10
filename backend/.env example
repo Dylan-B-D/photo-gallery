@@ -1,0 +1,4 @@
+JWT_SECRET=secret_key
+ADMIN_USERNAME=admin_username
+ADMIN_PASSWORD=admin_password
+DATABASE_URL=sqlite://database_name.db
