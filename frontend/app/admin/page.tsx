@@ -8,20 +8,25 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { getToken, isAuthenticated, removeToken } from "@/utils/auth";
 import { useRouter } from "next/navigation";
+import { getToken, isAuthenticated, removeToken } from "@/utils/auth";
+
+// Interface for our file data
+interface FileWithPreview {
+  file: File;
+  previewUrl: string;
+  loading: boolean;
+}
 
 const CreateAlbumDialog = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -30,19 +35,89 @@ const CreateAlbumDialog = () => {
     description: "",
     date: new Date().toISOString().split("T")[0],
   });
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<FileWithPreview[]>([]);
   const [isUploading, setIsUploading] = useState(false);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Clean up object URLs when component unmounts or files are removed
+  useEffect(() => {
+    return () => {
+      selectedFiles.forEach(file => URL.revokeObjectURL(file.previewUrl));
+    };
+  }, []);
+
+  // Function to create optimized preview
+  const createImagePreview = async (file: File): Promise<string> => {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      
+      img.onload = () => {
+        // Target dimensions for preview (thumbnail size)
+        const maxWidth = 200;
+        const maxHeight = 200;
+        
+        let width = img.width;
+        let height = img.height;
+        
+        // Calculate new dimensions maintaining aspect ratio
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        ctx?.drawImage(img, 0, 0, width, height);
+        
+        // Convert to JPEG with reduced quality
+        const previewUrl = canvas.toDataURL('image/jpeg', 0.5);
+        URL.revokeObjectURL(img.src); // Clean up the temporary object URL
+        resolve(previewUrl);
+      };
+      
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
-    const files = Array.from(e.target.files);
-    setSelectedFiles((prev) => [...prev, ...files]);
+    
+    const newFiles = Array.from(e.target.files).map(file => ({
+      file,
+      previewUrl: '',
+      loading: true
+    }));
+    
+    setSelectedFiles(prev => [...prev, ...newFiles]);
+    
+    // Create optimized previews
+    for (let i = 0; i < newFiles.length; i++) {
+      const previewUrl = await createImagePreview(newFiles[i].file);
+      setSelectedFiles(prev => prev.map((fileData, index) => {
+        if (fileData === newFiles[i]) {
+          return { ...fileData, previewUrl, loading: false };
+        }
+        return fileData;
+      }));
+    }
   };
 
   const removeFile = (indexToRemove: number) => {
-    setSelectedFiles((prev) =>
-      prev.filter((_, index) => index !== indexToRemove)
-    );
+    setSelectedFiles(prev => {
+      const newFiles = prev.filter((_, index) => index !== indexToRemove);
+      // Clean up the removed file's preview URL
+      URL.revokeObjectURL(prev[indexToRemove].previewUrl);
+      return newFiles;
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -55,8 +130,9 @@ const CreateAlbumDialog = () => {
       formData.append("description", albumData.description);
       formData.append("date", albumData.date);
 
-      selectedFiles.forEach((file) => {
-        formData.append("images", file);
+      // Only append the files that are still in the selectedFiles array
+      selectedFiles.forEach(fileData => {
+        formData.append("images", fileData.file);
       });
 
       const token = getToken();
@@ -64,7 +140,6 @@ const CreateAlbumDialog = () => {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
-          // Don't set 'Content-Type', let browser set it automatically for multipart
         },
         body: formData,
       });
@@ -73,7 +148,10 @@ const CreateAlbumDialog = () => {
         throw new Error("Failed to create album");
       }
 
-      // Reset and close
+      // Clean up all preview URLs
+      selectedFiles.forEach(fileData => URL.revokeObjectURL(fileData.previewUrl));
+      
+      // Reset form
       setAlbumData({
         name: "",
         description: "",
@@ -83,7 +161,6 @@ const CreateAlbumDialog = () => {
       setIsOpen(false);
     } catch (error) {
       console.error("Error creating album:", error);
-      // Show error toast or message
     } finally {
       setIsUploading(false);
     }
@@ -99,6 +176,8 @@ const CreateAlbumDialog = () => {
   }, [albumData, selectedFiles]);
 
   const removeAllFiles = () => {
+    // Clean up all preview URLs before removing
+    selectedFiles.forEach(fileData => URL.revokeObjectURL(fileData.previewUrl));
     setSelectedFiles([]);
   };
 
@@ -118,6 +197,7 @@ const CreateAlbumDialog = () => {
           onSubmit={handleSubmit}
           className="flex-1 overflow-hidden flex flex-col"
         >
+          {/* Rest of the form fields remain the same */}
           <div className="flex-1 overflow-y-auto p-4">
             <div className="space-y-4 mb-4">
               <div>
@@ -184,14 +264,18 @@ const CreateAlbumDialog = () => {
                           "repeat(auto-fit, minmax(80px, 1fr))",
                       }}
                     >
-                      {selectedFiles.map((file, index) => (
+                      {selectedFiles.map((fileData, index) => (
                         <div key={index} className="relative group">
                           <div className="w-20 h-20 rounded-md border bg-muted flex items-center justify-center overflow-hidden relative">
-                            <img
-                              src={URL.createObjectURL(file)}
-                              alt={`Preview ${index + 1}`}
-                              className="object-cover w-full h-full rounded-md"
-                            />
+                            {fileData.loading ? (
+                              <div className="animate-pulse bg-gray-200 w-full h-full" />
+                            ) : (
+                              <img
+                                src={fileData.previewUrl}
+                                alt={`Preview ${index + 1}`}
+                                className="object-cover w-full h-full rounded-md"
+                              />
+                            )}
                             <button
                               type="button"
                               onClick={() => removeFile(index)}
@@ -213,7 +297,6 @@ const CreateAlbumDialog = () => {
             </Card>
           </div>
           <div className="border-t p-4 flex justify-between items-center gap-4 shrink-0">
-            {/* Remove All Images Button */}
             <Button
               type="button"
               variant="outline"
@@ -224,7 +307,6 @@ const CreateAlbumDialog = () => {
               Remove All Images
             </Button>
 
-            {/* Cancel and Create Album Buttons */}
             <div className="flex gap-4">
               <Button
                 type="button"
