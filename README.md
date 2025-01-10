@@ -64,7 +64,7 @@ This is a photo gallery project.
 1. Set the `DATABASE_URL` environment variable:
 
     ```sh
-    export DATABASE_URL="sqlite://photogallery.db"
+    $env:DATABASE_URL="sqlite://photogallery.db"
     ```
 
 2. Create and migrate the SQLite database using `sqlx` CLI:
