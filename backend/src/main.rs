@@ -3,10 +3,11 @@ mod db;
 mod handlers;
 mod models;
 mod routes;
+mod utils;
 
 use log::{info, warn};
 use routes::create_router;
-use sqlx::{migrate::MigrateDatabase, Sqlite, SqlitePool};
+use sqlx::{migrate::MigrateDatabase, sqlite::SqlitePoolOptions, Sqlite};
 use tokio::net::TcpListener;
 
 #[tokio::main]
@@ -37,7 +38,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Sqlite::create_database(&db_url).await?;
     }
 
-    let pool = SqlitePool::connect(&db_url).await?;
+    let pool = SqlitePoolOptions::new()
+        .connect(&db_url)
+        .await?;
+
+    // Enable foreign key enforcement
+    sqlx::query("PRAGMA foreign_keys = ON;")
+        .execute(&pool)
+        .await?;
 
     // The macro approach references the migrations at compile time,
     // so "migrations" folder must be in your crate root (the same as Cargo.toml).

@@ -42,3 +42,31 @@ pub struct AlbumImage {
     pub album_id: String,
     pub file_name: String,
 }
+
+#[derive(Serialize, Deserialize, Debug)]pub struct ImageMetadata {
+    pub image_id: String,
+    pub camera_make: Option<String>,
+    pub camera_model: Option<String>,
+    pub lens_model: Option<String>,
+    pub iso: Option<i64>,
+    pub aperture: Option<f64>,
+    pub shutter_speed: Option<String>,
+    pub focal_length: Option<f64>,
+    pub light_source: Option<String>,
+    pub date_created: Option<String>,
+    pub file_size: Option<i64>,
+}
+
+#[derive(Debug, Default)]
+pub struct AlbumFields {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub date: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ModeMetadata {
+    pub camera_model: Option<String>,
+    pub lens_model: Option<String>,
+    pub aperture: Option<String>,
+}

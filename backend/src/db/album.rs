@@ -1,9 +1,11 @@
-use std::fs;
+use std::{fs, path::Path};
 
 use log::error;
 use uuid::Uuid;
-use sqlx::SqlitePool;
-use crate::models::{Album, AlbumImage};
+use sqlx::{SqlitePool, Row};
+use crate::{models::{Album, AlbumImage}, utils::exif_utils::parse_exif_metadata};
+
+use super::metadata::add_image_metadata;
 
 /// Insert a new album row, returning the created `Album` data
 pub async fn create_album(
@@ -55,19 +57,21 @@ pub async fn create_album(
 pub async fn add_images(
     pool: &SqlitePool,
     album_id: String,
-    file_paths: &[String], // This contains the full paths currently
+    album_name: String,
+    file_paths: &[String],
 ) -> Result<Vec<AlbumImage>, sqlx::Error> {
     let mut images = Vec::new();
 
     for file_path in file_paths {
-        let image_id = Uuid::new_v4().to_string();
+        let image_id = uuid::Uuid::new_v4().to_string();
 
-        // Extract only the filename from the full path
-        let file_name = match std::path::Path::new(file_path).file_name() {
+        // Extract the file name
+        let file_name = match Path::new(file_path).file_name() {
             Some(name) => name.to_string_lossy().to_string(),
-            None => file_path.clone(), // Fallback in case extraction fails
+            None => file_path.clone(),
         };
 
+        // 1. Insert the image record
         sqlx::query!(
             r#"
             INSERT INTO images (id, album_id, file_name)
@@ -80,8 +84,32 @@ pub async fn add_images(
         .execute(pool)
         .await?;
 
+        // 2. Construct the full path using album_name
+        let full_path = Path::new("uploads")
+            .join(&album_name) // Use album_name instead of album_id
+            .join(&file_name)
+            .to_string_lossy()
+            .to_string();
+
+        // 3. Attempt to parse EXIF
+        match parse_exif_metadata(Path::new(&full_path)) {
+            Ok(mut meta) => {
+                meta.image_id = image_id.clone(); // fill in the new ID
+                if let Err(e) = add_image_metadata(pool, &meta).await {
+                    log::warn!(
+                        "Failed to store EXIF metadata for {}: {:?}",
+                        full_path,
+                        e
+                    );
+                }
+            }
+            Err(e) => {
+                log::warn!("No valid EXIF metadata found for {}: {:?}", full_path, e);
+            }
+        }
+
         images.push(AlbumImage {
-            id: image_id,
+            id: image_id.clone(),
             album_id: album_id.clone(),
             file_name,
         });
@@ -89,6 +117,7 @@ pub async fn add_images(
 
     Ok(images)
 }
+
 
 
 /// Fetch all albums (without images).
@@ -231,22 +260,57 @@ pub async fn delete_images(
     album_id: &str,
     image_ids: &[String],
 ) -> Result<(), sqlx::Error> {
-    // Delete images from the database
-    let joined_image_ids = image_ids.join(",");
-    sqlx::query!(
+    if image_ids.is_empty() {
+        return Ok(()); // Nothing to delete
+    }
+
+    // 1. Retrieve album_name from album_id
+    let album_row = sqlx::query!(
         r#"
-        DELETE FROM images
-        WHERE album_id = ?1 AND id IN (?2)
+        SELECT name
+        FROM albums
+        WHERE id = ?1
         "#,
-        album_id,
-        joined_image_ids
+        album_id
     )
-    .execute(pool)
+    .fetch_one(pool)
     .await?;
 
-    // Optionally, delete image files from the filesystem
+    let album_name = album_row.name.replace("/", "_"); // Sanitize if necessary
+
+    // 2. Retrieve file_names for the given image_ids
+    // Dynamically build the query with the correct number of placeholders
+    let mut query_builder = String::from("SELECT file_name FROM images WHERE album_id = ?1 AND id IN (");
+    let placeholders: Vec<String> = image_ids.iter().map(|_| "?".to_string()).collect();
+    query_builder.push_str(&placeholders.join(", "));
+    query_builder.push(')');
+
+    let mut query = sqlx::query(&query_builder).bind(album_id);
     for image_id in image_ids {
-        let image_path = format!("uploads/{}/{}", album_id, image_id);
+        query = query.bind(image_id);
+    }
+
+    let image_rows = query.fetch_all(pool).await?;
+
+    let file_names: Vec<String> = image_rows
+        .into_iter()
+        .map(|row| row.get("file_name"))
+        .collect();
+
+    // 3. Delete image records from the database
+    let mut delete_query = String::from("DELETE FROM images WHERE album_id = ?1 AND id IN (");
+    delete_query.push_str(&placeholders.join(", "));
+    delete_query.push(')');
+
+    let mut delete_query = sqlx::query(&delete_query).bind(album_id);
+    for image_id in image_ids {
+        delete_query = delete_query.bind(image_id);
+    }
+    delete_query.execute(pool).await?;
+
+    // 4. Delete image files from the filesystem
+    for file_name in file_names {
+        let image_path = format!("uploads/{}/{}", album_name, file_name);
         if let Err(e) = fs::remove_file(&image_path) {
             error!("Failed to delete image file: {:?}, error: {:?}", image_path, e);
         }
@@ -254,6 +318,7 @@ pub async fn delete_images(
 
     Ok(())
 }
+
 
 pub async fn delete_album_record(
     pool: &SqlitePool,

@@ -21,15 +21,8 @@ use crate::{
         add_images, create_album, delete_album_images, delete_album_record, delete_images, get_album_by_id, get_albums, update_album
     },
     handlers::auth::verify_admin_request,
-    models::AppState,
+    models::{AppState, AlbumFields},
 };
-
-#[derive(Debug, Default)]
-pub struct AlbumFields {
-    pub name: Option<String>,
-    pub description: Option<String>,
-    pub date: Option<String>,
-}
 
 async fn process_field_stream(
     field: &mut axum::extract::multipart::Field<'_>,
@@ -310,7 +303,7 @@ pub async fn create_album_handler(
 
     match create_album(&state.pool, &album_name, &album_desc, &album_date, num_imgs).await {
         Ok(new_album) => {
-            match add_images(&state.pool, new_album.id.clone(), &uploaded_files).await {
+            match add_images(&state.pool, new_album.id.clone(), album_name.clone(), &uploaded_files).await { // Pass album_name
                 Ok(_) => {
                     info!(
                         "Successfully created album {} with {} images",
@@ -424,7 +417,7 @@ pub async fn update_album_handler(
 
     let mut fields = AlbumFields::default();
     let mut uploaded_files: Vec<String> = Vec::new();
-    let mut images_to_delete: Vec<String> = Vec::new(); // Declare images_to_delete
+    let mut images_to_delete: Vec<String> = Vec::new();
 
     // Get existing album first to check for name change
     let existing_album = match get_album_by_id(&state.pool, album_id.clone()).await {
@@ -450,11 +443,8 @@ pub async fn update_album_handler(
             "date" => fields.date = field.text().await.ok(),
             "images" => {
                 if let Ok(file_bytes) = process_field_stream(&mut field).await {
-                    let album_name = fields
-                        .name
-                        .clone()
-                        .unwrap_or_else(|| existing_album.name.clone());
-                    match save_file_to_album_folder(&album_name, file_bytes) {
+                    // Use existing album name here - we'll move files later if name changes
+                    match save_file_to_album_folder(&existing_album.name, file_bytes) {
                         Ok(file_path) => uploaded_files.push(file_path),
                         Err((status, body)) => return (status, body).into_response(),
                     }
@@ -471,7 +461,12 @@ pub async fn update_album_handler(
         }
     }
 
-    // Delete marked images
+    // Calculate new image count
+    let new_image_count = existing_album.number_of_images + 
+                         uploaded_files.len() as i32 - 
+                         images_to_delete.len() as i32;
+
+    // 1. First, delete marked images to release file handles
     if !images_to_delete.is_empty() {
         if let Err(e) = delete_images(&state.pool, &album_id, &images_to_delete).await {
             error!("Error deleting images: {:?}", e);
@@ -486,43 +481,60 @@ pub async fn update_album_handler(
         }
     }
 
-    // If album name is being updated, rename the folder
-    if let Some(new_name) = &fields.name {
-        if new_name != &existing_album.name {
-            let old_path = format!("uploads/{}", existing_album.name.replace("/", "_"));
-            let new_path = format!("uploads/{}", new_name.replace("/", "_"));
+    // 2. Handle album rename if needed
+    let final_album_name = fields
+        .name
+        .clone()
+        .unwrap_or_else(|| existing_album.name.clone());
 
-            if let Err(e) = fs::rename(&old_path, &new_path) {
-                error!("Error renaming album directory: {:?}", e);
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(serde_json::json!({
-                        "error": "Failed to rename album directory",
-                        "details": format!("{}", e)
-                    })),
-                )
-                    .into_response();
-            }
+    if final_album_name != existing_album.name {
+        let old_path = format!("uploads/{}", existing_album.name.replace("/", "_"));
+        let new_path = format!("uploads/{}", final_album_name.replace("/", "_"));
+
+        // Add small delay to ensure file handles are released
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        if let Err(e) = fs::rename(&old_path, &new_path) {
+            error!("Error renaming album directory: {:?}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": "Failed to rename album directory",
+                    "details": format!("{}", e)
+                })),
+            )
+                .into_response();
         }
+
+        // Update file paths for newly uploaded files to reflect new album name
+        uploaded_files = uploaded_files
+            .into_iter()
+            .map(|path| {
+                path.replace(
+                    &existing_album.name.replace("/", "_"),
+                    &final_album_name.replace("/", "_"),
+                )
+            })
+            .collect();
     }
 
-    // Update album in database
+    // 3. Update album in database
     match update_album(
         &state.pool,
         &album_id,
-        &fields.name.unwrap_or(existing_album.name),
-        &fields.description.unwrap_or(existing_album.description),
+        &final_album_name,
+        &fields.description.unwrap_or(existing_album.description.clone()),
         &fields
             .date
-            .unwrap_or(existing_album.date.unwrap_or_default()),
-        existing_album.number_of_images + uploaded_files.len() as i32,
+            .unwrap_or(existing_album.date.clone().unwrap_or_default()),
+        new_image_count,
     )
     .await
     {
         Ok(updated_album) => {
-            // Add new images if any
+            // 4. Add new images to database if any
             if !uploaded_files.is_empty() {
-                if let Err(e) = add_images(&state.pool, album_id, &uploaded_files).await {
+                if let Err(e) = add_images(&state.pool, album_id.clone(), final_album_name, &uploaded_files).await {
                     error!("Error adding new images: {:?}", e);
                     return (
                         StatusCode::INTERNAL_SERVER_ERROR,
@@ -540,7 +552,8 @@ pub async fn update_album_handler(
                 Json(serde_json::json!({
                     "message": "Album updated successfully",
                     "album": updated_album,
-                    "new_images": uploaded_files
+                    "new_images": uploaded_files,
+                    "deleted_images": images_to_delete
                 })),
             )
                 .into_response()

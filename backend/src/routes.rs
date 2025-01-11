@@ -1,6 +1,7 @@
 use crate::config::CONFIG;
 use crate::handlers::album::{create_album_handler, delete_album_handler, get_album_handler, get_albums_handler, update_album_handler};
 use crate::handlers::auth::{login_handler, verify_handler};
+use crate::handlers::metadata::{get_album_mode_metadata_handler, get_image_metadata_handler};
 use crate::models::AppState;
 use axum::extract::DefaultBodyLimit;
 use axum::{
@@ -45,6 +46,14 @@ pub fn create_router(pool: Pool<Sqlite>) -> Router {
             get(get_album_handler)
                 .put(update_album_handler)
                 .delete(delete_album_handler),
+        )
+        .route(
+            "/api/images/{id}/metadata",
+            get(get_image_metadata_handler),
+        )
+        .route(
+            "/api/albums/{id}/mode-metadata",
+            get(get_album_mode_metadata_handler),
         )
         .layer(cors)
         .layer(DefaultBodyLimit::max(2000 * 1024 * 1024)) // 2 GB
