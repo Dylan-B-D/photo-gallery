@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ArrowUpDown } from "lucide-react";
 import { Input } from "@/components/ui/input"; // Assuming you have an Input component
+import { Badge } from "@/components/ui/badge";
 
 // Define TypeScript interfaces for Album and AlbumImage
 interface Album {
@@ -82,7 +83,8 @@ const HomePage = () => {
 
         // Sort albums by date (newest first) initially
         albumsWithThumbnails.sort(
-          (a, b) => new Date(b.date || "").getTime() - new Date(a.date || "").getTime()
+          (a, b) =>
+            new Date(b.date || "").getTime() - new Date(a.date || "").getTime()
         );
 
         setAlbums(albumsWithThumbnails);
@@ -102,7 +104,9 @@ const HomePage = () => {
   const handleSort = (key: "date" | "name") => {
     const sortedAlbums = [...filteredAlbums].sort((a, b) => {
       if (key === "date") {
-        return new Date(b.date || "").getTime() - new Date(a.date || "").getTime(); // Newest first
+        return (
+          new Date(b.date || "").getTime() - new Date(a.date || "").getTime()
+        ); // Newest first
       }
       return a.name.localeCompare(b.name);
     });
@@ -136,7 +140,6 @@ const HomePage = () => {
           Login
         </Link>
       </div>
-
       {/* Search and Sorting Controls */}
       <div className="flex justify-between items-center mb-4">
         {/* Search Bar */}
@@ -166,7 +169,6 @@ const HomePage = () => {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
         {filteredAlbums.map((album) => (
           <Card
@@ -180,7 +182,16 @@ const HomePage = () => {
                 style={{
                   backgroundImage: `url(${album.thumbnail})`,
                 }}
-              ></div>
+              >
+                {/* Badge displaying number of images */}
+                <Badge
+                  variant="outline"
+                  className="absolute top-2 right-2 bg-black/50 text-white"
+                >
+                  {album.number_of_images}{" "}
+                  {album.number_of_images === 1 ? "image" : "images"}
+                </Badge>
+              </div>
 
               {/* Content with Overlay */}
               <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent backdrop-blur-sm border-gray-700">

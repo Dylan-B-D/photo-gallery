@@ -1,24 +1,22 @@
 use axum::{
-    extract::{State, Path},
+    extract::{State, Path, Multipart},
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
     Json,
 };
-use axum::extract::Multipart;
-use log::{error, info, warn};
+use log::{error, info, warn, debug};
+use tokio::time::timeout;
 use uuid::Uuid;
-use std::fs::File;
-use std::io::Write;
+use std::{fs::File, time::Duration};
+use std::io::{Write, BufWriter};
 use std::path::PathBuf;
+use bytes::BytesMut;
+use std::error::Error;
 
 use crate::{
-    handlers::auth::verify_admin_request,
-    models::AppState,
-    db::album::{create_album, add_images},
+    db::album::{add_images, create_album, get_album_by_id, get_albums}, handlers::auth::verify_admin_request, models::AppState
 };
-use crate::db::album::{get_albums, get_album_by_id};
 
-/// This struct is for parsing normal (non-file) fields from the multipart data.
 #[derive(Debug, Default)]
 pub struct AlbumFields {
     pub name: Option<String>,
@@ -26,61 +24,265 @@ pub struct AlbumFields {
     pub date: Option<String>,
 }
 
-/// Handle the creation of an album
+async fn process_field_stream(field: &mut axum::extract::multipart::Field<'_>) -> Result<Vec<u8>, String> {
+    let mut buffer = BytesMut::new();
+    let mut total_bytes = 0;
+    let mut chunk_count = 0;
+    const MAX_FILE_SIZE: usize = 100 * 1024 * 1024; // 100MB limit
+    const CHUNK_TIMEOUT: Duration = Duration::from_secs(30);
+
+    debug!(
+        "Starting to process field stream for file: {:?}, content-type: {:?}",
+        field.file_name(),
+        field.content_type(),
+    );
+
+    loop {
+        // Add timeout to chunk reading
+        match timeout(CHUNK_TIMEOUT, field.chunk()).await {
+            Ok(chunk_result) => {
+                match chunk_result {
+                    Ok(Some(chunk)) => {
+                        chunk_count += 1;
+                        let chunk_size = chunk.len();
+                        
+                        debug!(
+                            "Processing chunk {} - Size: {} bytes, is_empty: {}",
+                            chunk_count,
+                            chunk_size,
+                            chunk.is_empty()
+                        );
+
+                        total_bytes += chunk_size;
+                        if total_bytes > MAX_FILE_SIZE {
+                            error!(
+                                "File size exceeds maximum allowed size of {} bytes",
+                                MAX_FILE_SIZE
+                            );
+                            return Err(format!(
+                                "File size exceeds maximum allowed size of {} MB",
+                                MAX_FILE_SIZE / 1024 / 1024
+                            ));
+                        }
+
+                        // Process chunk in smaller segments if it's large
+                        let mut offset = 0;
+                        while offset < chunk.len() {
+                            let end = std::cmp::min(offset + 65536, chunk.len());
+                            buffer.extend_from_slice(&chunk[offset..end]);
+                            
+                            if end - offset == 65536 {
+                                debug!(
+                                    "Added 64KB segment of chunk {}. Total bytes: {}",
+                                    chunk_count, total_bytes
+                                );
+                            }
+                            
+                            offset = end;
+                        }
+
+                        debug!("Successfully processed full chunk {}", chunk_count);
+                    }
+                    Ok(None) => {
+                        debug!(
+                            "Finished reading file stream. Total chunks: {}, Total bytes: {}",
+                            chunk_count, total_bytes
+                        );
+                        break;
+                    }
+                    Err(e) => {
+                        error!(
+                            "Error reading chunk {}: {:?}. Error type: {}. Total bytes: {}",
+                            chunk_count,
+                            e,
+                            std::any::type_name_of_val(&e),
+                            total_bytes
+                        );
+
+                        if let Some(source) = e.source() {
+                            error!("Underlying error: {:?}", source);
+                        }
+
+                        // Try to recover if we have partial data
+                        if total_bytes > 0 {
+                            warn!(
+                                "Stream error occurred but we have partial data ({} bytes). Attempting to continue...",
+                                total_bytes
+                            );
+                            break;
+                        }
+
+                        return Err(format!(
+                            "Failed to read file chunk {}. Error: {}. Total bytes: {}",
+                            chunk_count, e, total_bytes
+                        ));
+                    }
+                }
+            }
+            Err(_) => {
+                error!(
+                    "Timeout reading chunk after {} seconds",
+                    CHUNK_TIMEOUT.as_secs()
+                );
+                // Try to recover if we have partial data
+                if total_bytes > 0 {
+                    warn!(
+                        "Timeout occurred but we have partial data ({} bytes). Attempting to continue...",
+                        total_bytes
+                    );
+                    break;
+                }
+                return Err("Timeout reading file chunk".to_string());
+            }
+        }
+
+        // Add periodic progress logging
+        if chunk_count % 5 == 0 {
+            info!(
+                "Upload progress: {} chunks, {} bytes processed",
+                chunk_count, total_bytes
+            );
+        }
+    }
+
+    Ok(buffer.to_vec())
+}
+
 pub async fn create_album_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
     mut multipart: Multipart,
 ) -> impl IntoResponse {
-    // 1. Verify admin
+    debug!("Starting create_album_handler");
+    
+    // Log all headers for debugging
+    for (name, value) in headers.iter() {
+        debug!("Header: {} = {:?}", name, value);
+    }
+
+    // Check specific important headers
+    if let Some(content_type) = headers.get("content-type") {
+        debug!("Content-Type details: {:?}", content_type);
+        if let Ok(ct_str) = content_type.to_str() {
+            if let Some(boundary) = ct_str.split("boundary=").nth(1) {
+                debug!("Multipart boundary: {}", boundary);
+            }
+        }
+    }
+    
+    debug!("Content-Length header: {:?}", headers.get("content-length"));
+    debug!("Transfer-Encoding header: {:?}", headers.get("transfer-encoding"));
+
+    // Rest of the handler implementation remains the same...
     if let Err((status, body)) = verify_admin_request(&headers) {
         return (status, body).into_response();
     }
 
     let mut fields = AlbumFields::default();
     let mut uploaded_files: Vec<String> = Vec::new();
+    let mut field_count = 0;
 
-    while let Some(field) = match multipart.next_field().await {
-        Ok(Some(f)) => Some(f),
-        Ok(None) => None,
-        Err(e) => {
-            error!("Multipart field error: {:?}", e);
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({"error": "Invalid form data"})),
-            )
-                .into_response();
-        }
-    } {
-        let name = field.name().unwrap_or("").to_string();
-        match name.as_str() {
-            "name" => {
-                fields.name = Some(String::from_utf8(field.bytes().await.unwrap().to_vec()).unwrap());
-            }
-            "description" => {
-                fields.description = Some(String::from_utf8(field.bytes().await.unwrap().to_vec()).unwrap());
-            }
-            "date" => {
-                fields.date = Some(String::from_utf8(field.bytes().await.unwrap().to_vec()).unwrap());
-            }
-            "images" => {
-                // handle file
-                let file_bytes = field.bytes().await.unwrap();
-                match save_file_to_album_folder(
-                    &fields.name.clone().unwrap_or_default(),
-                    file_bytes,
-                ) {
-                    Ok(file_path) => uploaded_files.push(file_path),
-                    Err((status, body)) => return (status, body).into_response(),
+    loop {
+        match multipart.next_field().await {
+            Ok(Some(mut field)) => {
+                field_count += 1;
+                let field_name = field.name().unwrap_or("").to_string();
+                let file_name = field.file_name().map(|s| s.to_string());
+                let content_type = field.content_type().map(|s| s.to_string());
+                
+                debug!(
+                    "Processing field #{}: name='{}', filename={:?}, content_type={:?}",
+                    field_count, field_name, file_name, content_type
+                );
+
+                match field_name.as_str() {
+                    "name" | "description" | "date" => {
+                        let text_result = field.text().await;
+                        match text_result.as_ref() {
+                            Ok(text) => debug!("Read text field '{}': {}", field_name, text),
+                            Err(e) => error!("Failed to read text field '{}': {:?}", field_name, e),
+                        }
+
+                        match field_name.as_str() {
+                            "name" => fields.name = text_result.as_ref().ok().cloned(),
+                            "description" => fields.description = text_result.as_ref().ok().cloned(),
+                            "date" => fields.date = text_result.as_ref().ok().cloned(),
+                            _ => unreachable!(),
+                        }
+
+                        if text_result.is_err() {
+                            return (
+                                StatusCode::BAD_REQUEST,
+                                Json(serde_json::json!({
+                                    "error": format!("Failed to read {} field", field_name),
+                                    "details": format!("{}", text_result.unwrap_err())
+                                }))
+                            ).into_response();
+                        }
+                    }
+                    "images" => {
+                        let file_name = field.file_name().unwrap_or("unknown").to_string();
+                        info!("Processing image file: {}", file_name);
+
+                        match process_field_stream(&mut field).await {
+                            Ok(file_bytes) => {
+                                info!(
+                                    "Successfully read {} bytes for file {}",
+                                    file_bytes.len(),
+                                    file_name
+                                );
+                                match save_file_to_album_folder(
+                                    &fields.name.clone().unwrap_or_default(),
+                                    file_bytes,
+                                ) {
+                                    Ok(file_path) => {
+                                        info!("Successfully saved file to {}", file_path);
+                                        uploaded_files.push(file_path);
+                                    }
+                                    Err((status, body)) => {
+                                        error!("Failed to save file {}: {:?}", file_name, body);
+                                        return (status, body).into_response();
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                error!("Failed to process file {}: {}", file_name, e);
+                                return (
+                                    StatusCode::BAD_REQUEST,
+                                    Json(serde_json::json!({
+                                        "error": "Failed to process file upload",
+                                        "file": file_name,
+                                        "details": e
+                                    }))
+                                ).into_response();
+                            }
+                        }
+                    }
+                    _ => {
+                        warn!("Ignoring unexpected field: {}", field_name);
+                    }
                 }
             }
-            _ => {
-                warn!("Ignoring unexpected field: {}", name);
+            Ok(None) => {
+                debug!("No more fields to process. Total fields processed: {}", field_count);
+                break;
+            }
+            Err(e) => {
+                error!("Failed to get next field: {:?}", e);
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({
+                        "error": "Failed to process form data",
+                        "details": format!("{}", e)
+                    }))
+                ).into_response();
             }
         }
     }
 
-    // 2. Persist to DB
+    debug!("Finished processing all fields. Creating album in database...");
+    
+    // Create album in database
     let album_name = fields.name.clone().unwrap_or_default();
     let album_desc = fields.description.clone().unwrap_or_default();
     let album_date = fields.date.clone().unwrap_or_default();
@@ -88,58 +290,64 @@ pub async fn create_album_handler(
 
     match create_album(&state.pool, &album_name, &album_desc, &album_date, num_imgs).await {
         Ok(new_album) => {
-            // Insert images rows
-            let image_records = add_images(&state.pool, new_album.id.clone(), &uploaded_files).await;
-            if let Err(e) = image_records {
-                error!("Error inserting image records: {:?}", e);
-                // In a real app, consider rolling back the album insertion if image insert fails
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(serde_json::json!({"error": "Failed to store images metadata"}))
-                )
-                    .into_response();
+            match add_images(&state.pool, new_album.id.clone(), &uploaded_files).await {
+                Ok(_) => {
+                    info!("Successfully created album {} with {} images", new_album.id, num_imgs);
+                    (
+                        StatusCode::OK,
+                        Json(serde_json::json!({
+                            "message": "Album created successfully",
+                            "album": {
+                                "id": new_album.id,
+                                "name": new_album.name,
+                                "description": new_album.description,
+                                "date": new_album.date,
+                                "number_of_images": new_album.number_of_images
+                            },
+                            "images": uploaded_files
+                        })),
+                    ).into_response()
+                }
+                Err(e) => {
+                    error!("Error inserting image records: {:?}", e);
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(serde_json::json!({
+                            "error": "Failed to store images metadata",
+                            "details": format!("{}", e)
+                        }))
+                    ).into_response()
+                }
             }
-
-            return (
-                StatusCode::OK,
-                Json(serde_json::json!({
-                    "message": "Album created successfully",
-                    "album": {
-                        "id": new_album.id,
-                        "name": new_album.name,
-                        "description": new_album.description,
-                        "date": new_album.date,
-                        "number_of_images": new_album.number_of_images
-                    },
-                    "images": uploaded_files
-                })),
-            )
-                .into_response();
         }
         Err(e) => {
             error!("Error inserting album: {:?}", e);
-            return (
+            (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": "Failed to create album"}))
-            )
-                .into_response();
+                Json(serde_json::json!({
+                    "error": "Failed to create album",
+                    "details": format!("{}", e)
+                }))
+            ).into_response()
         }
     }
 }
 
-/// Save the file bytes to `uploads/<albumName>/some-unique-filename.jpg`
-/// Returns the relative path or filename that was stored.
 fn save_file_to_album_folder(
     album_name: &str,
-    file_bytes: bytes::Bytes,
+    file_bytes: Vec<u8>,
 ) -> Result<String, (StatusCode, Json<serde_json::Value>)> {
-    let safe_album_name = album_name.replace("/", "_"); // naive sanitization
+    let safe_album_name = album_name.replace("/", "_");
     let dir_path = format!("uploads/{}", safe_album_name);
+    
     if let Err(e) = std::fs::create_dir_all(&dir_path) {
         error!("Failed to create album directory {}: {:?}", dir_path, e);
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": "Failed to create album directory"})),
+            Json(serde_json::json!({
+                "error": "Failed to create album directory",
+                "details": format!("{}", e)
+            })),
         ));
     }
 
@@ -147,26 +355,32 @@ fn save_file_to_album_folder(
     let file_path = PathBuf::from(format!("{}/{}", dir_path, file_name));
     info!("Saving file to {:?}", file_path);
 
-    let mut file = match File::create(&file_path) {
+    let file = match File::create(&file_path) {
         Ok(f) => f,
         Err(e) => {
             error!("Failed to create file: {:?}", e);
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": "Failed to create file"})),
+                Json(serde_json::json!({
+                    "error": "Failed to create file",
+                    "details": format!("{}", e)
+                })),
             ));
         }
     };
 
-    if let Err(e) = file.write_all(&file_bytes) {
+    let mut writer = BufWriter::new(file);
+    if let Err(e) = writer.write_all(&file_bytes) {
         error!("Failed to write file: {:?}", e);
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": "Failed to write file"})),
+            Json(serde_json::json!({
+                "error": "Failed to write file",
+                "details": format!("{}", e)
+            })),
         ));
     }
 
-    // Return just the final portion: "uploads/AlbumName/xyz.jpg", for example
     Ok(format!("{}/{}", safe_album_name, file_name))
 }
 
