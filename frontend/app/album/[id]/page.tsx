@@ -226,18 +226,42 @@ const AlbumPage = () => {
           <div className="absolute bottom-4 right-4 flex items-center space-x-4">
             <Button
               variant="outline"
-              onClick={() => {
-                const link = document.createElement("a");
-                link.href = `http://localhost:8080/uploads/${encodeURIComponent(
+              onClick={async () => {
+                const url = `http://localhost:8080/uploads/${encodeURIComponent(
                   album.name
                 )}/${encodeURIComponent(images[currentSlide].file_name)}`;
-                link.download = images[currentSlide].file_name;
-                link.click();
+
+                try {
+                  // Fetch the file as a blob
+                  const response = await fetch(url);
+                  if (!response.ok) {
+                    throw new Error(
+                      `Failed to fetch image. Status: ${response.status}`
+                    );
+                  }
+
+                  const blob = await response.blob();
+
+                  // Create a temporary URL for the blob
+                  const tempUrl = URL.createObjectURL(blob);
+
+                  // Create an anchor element and trigger click
+                  const link = document.createElement("a");
+                  link.href = tempUrl;
+                  link.download = images[currentSlide].file_name;
+                  link.click();
+
+                  // Clean up the temporary object URL
+                  URL.revokeObjectURL(tempUrl);
+                } catch (error) {
+                  console.error("Download failed:", error);
+                }
               }}
               className="text-white"
             >
               <Download />
             </Button>
+
             <Button
               variant="outline"
               onClick={() => setShowInfo((prev) => !prev)}
@@ -252,25 +276,25 @@ const AlbumPage = () => {
             <div className="absolute bottom-16 right-4 bg-gray-800 bg-opacity-75 p-4 rounded-lg text-white">
               <h2 className="text-lg font-bold mb-2">Image Metadata</h2>
               <p>
-                <strong>Camera Make:</strong> Placeholder
+                <strong>Camera Make:</strong> Coming Soon
               </p>
               <p>
-                <strong>Camera Model:</strong> Placeholder
+                <strong>Camera Model:</strong> Coming Soon
               </p>
               <p>
-                <strong>Lens Model:</strong> Placeholder
+                <strong>Lens Model:</strong> Coming Soon
               </p>
               <p>
-                <strong>ISO:</strong> Placeholder
+                <strong>ISO:</strong> Coming Soon
               </p>
               <p>
-                <strong>Aperture:</strong> Placeholder
+                <strong>Aperture:</strong> Coming Soon
               </p>
               <p>
-                <strong>Shutter Speed:</strong> Placeholder
+                <strong>Shutter Speed:</strong> Coming Soon
               </p>
               <p>
-                <strong>Focal Length:</strong> Placeholder
+                <strong>Focal Length:</strong> Coming Soon
               </p>
             </div>
           )}
