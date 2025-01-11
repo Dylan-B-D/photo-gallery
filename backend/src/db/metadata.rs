@@ -1,28 +1,17 @@
-use log::error;
 use sqlx::{SqlitePool, Error, Row};
 use crate::models::{ImageMetadata, ModeMetadata};
 
 /// Retrieves the mode (most common value) for specified columns within an album.
 pub async fn get_album_mode_metadata(pool: &SqlitePool, album_id: &str) -> Result<ModeMetadata, Error> {
-    // Define the columns for which you want to find the mode.
     const MODE_COLUMNS: &[&str] = &["camera_model", "lens_model", "aperture"];
 
-    // Initialize ModeMetadata with None values.
-    let mut mode_metadata = ModeMetadata {
-        camera_model: None,
-        lens_model: None,
-        aperture: None,
-    };
+    let mut mode_metadata = ModeMetadata::default();
 
-    // Iterate over each column and find its mode.
     for &column in MODE_COLUMNS {
-        // Validate the column name to prevent SQL injection.
-        if !["camera_model", "lens_model", "aperture"].contains(&column) {
-            error!("Invalid column name attempted for mode calculation: {}", column);
-            continue; // Skip invalid columns.
+        if !MODE_COLUMNS.contains(&column) {
+            continue;
         }
 
-        // Construct the SQL query safely.
         let query = format!(
             r#"
             SELECT {0}, COUNT(*) as cnt
@@ -36,26 +25,35 @@ pub async fn get_album_mode_metadata(pool: &SqlitePool, album_id: &str) -> Resul
             column
         );
 
-        // Execute the query using `sqlx::query`.
         let row = sqlx::query(&query)
             .bind(album_id)
             .fetch_optional(pool)
             .await?;
 
-        // Extract the mode value from the row, if available.
-        let mode_value: Option<String> = row.and_then(|r| r.try_get(column).ok());
-
-        // Assign the mode value to the appropriate field in ModeMetadata.
         match column {
-            "camera_model" => mode_metadata.camera_model = mode_value,
-            "lens_model" => mode_metadata.lens_model = mode_value,
-            "aperture" => mode_metadata.aperture = mode_value,
-            _ => {} // Already validated; no action needed.
+            "camera_model" => {
+                mode_metadata.camera_model = row
+                    .and_then(|r| r.try_get::<String, _>("camera_model").ok())
+                    .map(|s| s.trim_matches('"').to_string());
+            }
+            "lens_model" => {
+                mode_metadata.lens_model = row
+                    .and_then(|r| r.try_get::<String, _>("lens_model").ok())
+                    .map(|s| s.trim_matches('"').to_string());
+            }
+            "aperture" => {
+                mode_metadata.aperture = row
+                    .and_then(|r| r.try_get::<f64, _>("aperture").ok())
+                    .map(|a| format!("f/{:.1}", a));
+            }
+            _ => {}
         }
     }
 
     Ok(mode_metadata)
 }
+
+
 
 pub async fn add_image_metadata(
     pool: &SqlitePool,

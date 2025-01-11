@@ -43,7 +43,8 @@ pub struct AlbumImage {
     pub file_name: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]pub struct ImageMetadata {
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ImageMetadata {
     pub image_id: String,
     pub camera_make: Option<String>,
     pub camera_model: Option<String>,
@@ -67,6 +68,20 @@ pub struct AlbumFields {
 #[derive(Debug, Serialize)]
 pub struct ModeMetadata {
     pub camera_model: Option<String>,
+
     pub lens_model: Option<String>,
+
     pub aperture: Option<String>,
+}
+
+impl Default for ModeMetadata {
+    fn default() -> Self {
+        ModeMetadata {
+            camera_model: None,
+
+            lens_model: None,
+
+            aperture: None,
+        }
+    }
 }

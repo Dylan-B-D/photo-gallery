@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { ArrowUpDown } from "lucide-react";
-import { Input } from "@/components/ui/input"; // Assuming you have an Input component
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 
 // Define TypeScript interfaces for Album and AlbumImage
@@ -21,7 +21,10 @@ interface Album {
   description: string;
   date?: string;
   number_of_images: number;
-  thumbnail?: string; // Optional field for thumbnail URL
+  thumbnail?: string;
+  camera_model?: string;
+  lens_model?: string;
+  aperture?: string;
 }
 
 interface AlbumImage {
@@ -47,48 +50,51 @@ const HomePage = () => {
         }
 
         const albumsData: Album[] = await response.json();
-        console.log("Fetched albums:", albumsData); // Log fetched albums
 
-        const albumsWithThumbnails = await Promise.all(
+        // Fetch mode metadata for each album and attach it
+        const albumsWithMetadata = await Promise.all(
           albumsData.map(async (album) => {
             const imagesResponse = await fetch(
               `http://localhost:8080/api/albums/${album.id}`
             );
-            if (imagesResponse.ok) {
-              const imagesData: { images: AlbumImage[] } =
-                await imagesResponse.json();
-              console.log(
-                `Fetched images for album ${album.name}:`,
-                imagesData
-              );
+            const modeMetadataResponse = await fetch(
+              `http://localhost:8080/api/albums/${album.id}/mode-metadata`
+            );
 
-              const firstImage = imagesData.images[0]?.file_name;
-              const thumbnail = firstImage
-                ? `http://localhost:8080/uploads/${encodeURIComponent(
-                    album.name
-                  )}/${encodeURIComponent(firstImage)}`
-                : "https://via.placeholder.com/300x200";
+            let modeMetadata = {
+              camera_model: undefined,
+              lens_model: undefined,
+              aperture: undefined,
+            };
 
-              console.log(`Thumbnail URL for album ${album.name}:`, thumbnail);
-              return { ...album, thumbnail };
+            if (modeMetadataResponse.ok) {
+              modeMetadata = await modeMetadataResponse.json();
+              console.log("modeMetadata", modeMetadata);
             }
 
-            console.warn(`No images found for album ${album.name}`);
-            return {
-              ...album,
-              thumbnail: "https://via.placeholder.com/300x200",
-            };
+            const imagesData: { images: AlbumImage[] } = imagesResponse.ok
+              ? await imagesResponse.json()
+              : { images: [] };
+
+            const firstImage = imagesData.images[0]?.file_name;
+            const thumbnail = firstImage
+              ? `http://localhost:8080/uploads/${encodeURIComponent(
+                  album.name
+                )}/${encodeURIComponent(firstImage)}`
+              : "https://via.placeholder.com/300x200";
+
+            return { ...album, thumbnail, ...modeMetadata };
           })
         );
 
         // Sort albums by date (newest first) initially
-        albumsWithThumbnails.sort(
+        albumsWithMetadata.sort(
           (a, b) =>
             new Date(b.date || "").getTime() - new Date(a.date || "").getTime()
         );
 
-        setAlbums(albumsWithThumbnails);
-        setFilteredAlbums(albumsWithThumbnails); // Initialize filtered albums
+        setAlbums(albumsWithMetadata);
+        setFilteredAlbums(albumsWithMetadata); // Initialize filtered albums
       } catch (err: any) {
         console.error("Error fetching albums:", err.message);
         setError(err.message);
@@ -172,45 +178,67 @@ const HomePage = () => {
         </DropdownMenu>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-      {filteredAlbums.map((album) => (
-  <Card
-    key={album.id}
-    className="relative overflow-hidden rounded-lg shadow-lg hover:shadow-xl transition-shadow"
-  >
-    <Link href={`/album/${album.id}`} className="block">
-      {/* Background Image with Aspect Ratio */}
-      <div className="relative aspect-[4/3]">
-        <img
-          src={album.thumbnail}
-          alt={`Thumbnail for ${album.name}`}
-          className="absolute inset-0 w-full h-full object-cover"
-          loading="lazy"
-        />
-        {/* Badge displaying number of images */}
-        <Badge
-          variant="outline"
-          className="absolute top-2 right-2 bg-black/50 text-white"
-        >
-          {album.number_of_images}{" "}
-          {album.number_of_images === 1 ? "image" : "images"}
-        </Badge>
-      </div>
+        {filteredAlbums.map((album) => (
+          <Card
+            key={album.id}
+            className="relative overflow-hidden rounded-lg shadow-lg hover:shadow-xl transition-shadow"
+          >
+            <Link href={`/album/${album.id}`} className="block">
+              {/* Background Image with Aspect Ratio */}
+              <div className="relative aspect-[4/3]">
+                <img
+                  src={album.thumbnail}
+                  alt={`Thumbnail for ${album.name}`}
+                  className="absolute inset-0 w-full h-full object-cover"
+                  loading="lazy"
+                />
+                {/* Badge displaying number of images */}
+                <Badge
+                  variant="outline"
+                  className="absolute top-2 right-2 bg-black/50 text-white"
+                >
+                  {album.number_of_images}{" "}
+                  {album.number_of_images === 1 ? "image" : "images"}
+                </Badge>
+                {/* Stacked badges for camera model, lens model, and aperture */}
+                <div className="absolute top-2 right-2 flex flex-col items-end space-y-1">
+                  <Badge variant="outline" className="bg-black/50 text-white">
+                    {album.number_of_images}{" "}
+                    {album.number_of_images === 1 ? "image" : "images"}
+                  </Badge>
+                  {album.camera_model && (
+                    <Badge variant="outline" className="bg-black/50 text-white">
+                      {album.camera_model}
+                    </Badge>
+                  )}
+                  {album.lens_model && (
+                    <Badge variant="outline" className="bg-black/50 text-white">
+                      {album.lens_model}
+                    </Badge>
+                  )}
+                  {album.aperture && (
+                    <Badge variant="outline" className="bg-black/50 text-white">
+                      {album.aperture}
+                    </Badge>
+                  )}
+                </div>
+              </div>
 
-      {/* Content with Overlay */}
-      <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent backdrop-blur-sm border-gray-700">
-        <div className="flex justify-between items-center">
-          <h2 className="text-lg font-semibold text-white">
-            {album.name}
-          </h2>
-          <p className="text-sm text-gray-300">{album.date}</p>
-        </div>
-        <p className="text-sm text-gray-300 line-clamp-2 mt-2">
-          {album.description}
-        </p>
-      </div>
-    </Link>
-  </Card>
-))}
+              {/* Content with Overlay */}
+              <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent backdrop-blur-sm border-gray-700">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-lg font-semibold text-white">
+                    {album.name}
+                  </h2>
+                  <p className="text-sm text-gray-300">{album.date}</p>
+                </div>
+                <p className="text-sm text-gray-300 line-clamp-2 mt-2">
+                  {album.description}
+                </p>
+              </div>
+            </Link>
+          </Card>
+        ))}
       </div>
     </div>
   );

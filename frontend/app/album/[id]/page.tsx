@@ -14,6 +14,7 @@ import {
   Info,
   Maximize2,
   Minimize2,
+  Loader2,
 } from "lucide-react";
 
 interface AlbumImage {
@@ -28,6 +29,20 @@ interface Album {
   description: string;
   date?: string;
   number_of_images: number;
+}
+
+interface ImageMetadata {
+  image_id: string;
+  camera_make?: string;
+  camera_model?: string;
+  lens_model?: string;
+  iso?: number;
+  aperture?: number;
+  shutter_speed?: string;
+  focal_length?: number;
+  light_source?: string;
+  date_created?: string;
+  file_size?: number;
 }
 
 const AlbumPage = () => {
@@ -45,6 +60,12 @@ const AlbumPage = () => {
   const [transitionTime, setTransitionTime] = useState(3000); // Default transition time in milliseconds
   const [isViewingMode, setIsViewingMode] = useState(false); // Viewing mode flag
   const [showInfo, setShowInfo] = useState(false); // Info panel toggle
+
+  const [imageMetadata, setImageMetadata] = useState<ImageMetadata | null>(
+    null
+  ); // Image metadata state
+  const [isMetadataLoading, setIsMetadataLoading] = useState(false); // Metadata loading state
+  const [metadataError, setMetadataError] = useState<string | null>(null); // Metadata error state
 
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -137,6 +158,35 @@ const AlbumPage = () => {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isViewingMode, isSlideshowActive, images.length]);
+
+  const fetchImageMetadata = async (imageId: string) => {
+    setIsMetadataLoading(true);
+    setMetadataError(null);
+
+    try {
+      const response = await fetch(
+        `http://localhost:8080/api/images/${imageId}/metadata`
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch image metadata");
+      }
+
+      const data: { metadata: ImageMetadata } = await response.json();
+      setImageMetadata(data.metadata);
+    } catch (err: any) {
+      setMetadataError(err.message);
+      setImageMetadata(null);
+    } finally {
+      setIsMetadataLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showInfo && images[currentSlide]) {
+      fetchImageMetadata(images[currentSlide].id);
+    }
+  }, [showInfo, currentSlide]);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -271,33 +321,85 @@ const AlbumPage = () => {
             </Button>
           </div>
 
-          {/* Info Panel */}
-          {showInfo && (
-            <div className="absolute bottom-16 right-4 bg-gray-800 bg-opacity-75 p-4 rounded-lg text-white">
-              <h2 className="text-lg font-bold mb-2">Image Metadata</h2>
-              <p>
-                <strong>Camera Make:</strong> Coming Soon
-              </p>
-              <p>
-                <strong>Camera Model:</strong> Coming Soon
-              </p>
-              <p>
-                <strong>Lens Model:</strong> Coming Soon
-              </p>
-              <p>
-                <strong>ISO:</strong> Coming Soon
-              </p>
-              <p>
-                <strong>Aperture:</strong> Coming Soon
-              </p>
-              <p>
-                <strong>Shutter Speed:</strong> Coming Soon
-              </p>
-              <p>
-                <strong>Focal Length:</strong> Coming Soon
-              </p>
-            </div>
-          )}
+{/* Info Panel */}
+{showInfo && (
+  <div className="absolute bottom-16 right-4 bg-gray-800 bg-opacity-90 p-6 rounded-lg text-white w-80 shadow-lg">
+    {isMetadataLoading ? (
+      <div className="flex items-center justify-center">
+        <Loader2 className="animate-spin" />
+      </div>
+    ) : metadataError ? (
+      <p className="text-red-500 text-center">Error: {metadataError}</p>
+    ) : imageMetadata ? (
+      <div>
+        <h2 className="text-xl font-semibold mb-4 border-b border-gray-600 pb-2">
+          Image Metadata
+        </h2>
+
+        {/* Camera Info Section */}
+        <div className="mb-4">
+          <div className="space-y-1 text-sm">
+            <p>
+              <strong>Make:</strong> {imageMetadata.camera_make || "N/A"}
+            </p>
+            <p>
+              <strong>Model:</strong> {imageMetadata.camera_model || "N/A"}
+            </p>
+            <p>
+              <strong>Lens:</strong> {imageMetadata.lens_model || "N/A"}
+            </p>
+          </div>
+        </div>
+
+        {/* Technical Details Section */}
+        <div className="mb-4">
+          <div className="space-y-1 text-sm">
+            <p>
+              <strong>ISO:</strong> {imageMetadata.iso || "N/A"}
+            </p>
+            <p>
+              <strong>Aperture:</strong>{" "}
+              {imageMetadata.aperture ? `f/${imageMetadata.aperture}` : "N/A"}
+            </p>
+            <p>
+              <strong>Shutter Speed:</strong>{" "}
+              {imageMetadata.shutter_speed || "N/A"}
+            </p>
+            <p>
+              <strong>Focal Length:</strong>{" "}
+              {imageMetadata.focal_length
+                ? `${imageMetadata.focal_length}mm`
+                : "N/A"}
+            </p>
+            <p>
+              <strong>Light Source:</strong>{" "}
+              {imageMetadata.light_source || "N/A"}
+            </p>
+          </div>
+        </div>
+
+        {/* Image Details Section */}
+        <div>
+          <div className="space-y-1 text-sm">
+            <p>
+              <strong>Date Created:</strong>{" "}
+              {imageMetadata.date_created || "N/A"}
+            </p>
+            <p>
+              <strong>File Size:</strong>{" "}
+              {imageMetadata.file_size
+                ? `${(imageMetadata.file_size / 1024).toFixed(2)} KB`
+                : "N/A"}
+            </p>
+          </div>
+        </div>
+      </div>
+    ) : (
+      <p className="text-center">No metadata available.</p>
+    )}
+  </div>
+)}
+
         </div>
       ) : isSlideshowActive ? (
         // Slideshow Mode
