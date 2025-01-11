@@ -209,10 +209,9 @@ dependencies = [
  "bytes",
  "chrono",
  "dotenv",
- "dotenvy",
  "env_logger",
- "exif",
  "jsonwebtoken",
+ "kamadak-exif",
  "log",
  "once_cell",
  "serde",
@@ -583,26 +582,6 @@ dependencies = [
  "concurrent-queue",
  "parking",
  "pin-project-lite",
-]
-
-[[package]]
-name = "exif"
-version = "0.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33a3d04e1284789bde99b86efed7e78c9c12e88b8146be27faf4404e05d8716e"
-dependencies = [
- "exif-sys",
- "libc",
-]
-
-[[package]]
-name = "exif-sys"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aeb44bee079869d834d0f9023ebffe7550ff005daa57b0b9b2d0d53dd2cb08cf"
-dependencies = [
- "libc",
- "pkg-config",
 ]
 
 [[package]]
@@ -1130,6 +1109,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "kamadak-exif"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1130d80c7374efad55a117d715a3af9368f0fa7a2c54573afc15a188cd984837"
+dependencies = [
+ "mutate_once",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1266,6 +1254,12 @@ dependencies = [
  "spin",
  "version_check",
 ]
+
+[[package]]
+name = "mutate_once"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16cf681a23b4d0a43fc35024c176437f9dcd818db34e0f42ab456a0ee5ad497b"
 
 [[package]]
 name = "native-tls"

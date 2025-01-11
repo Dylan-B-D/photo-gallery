@@ -172,44 +172,45 @@ const HomePage = () => {
         </DropdownMenu>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-        {filteredAlbums.map((album) => (
-          <Card
-            key={album.id}
-            className="relative overflow-hidden rounded-lg shadow-lg hover:shadow-xl transition-shadow"
-          >
-            <Link href={`/album/${album.id}`} className="block">
-              {/* Background Image with Aspect Ratio */}
-              <div
-                className="relative aspect-[4/3] bg-cover bg-center"
-                style={{
-                  backgroundImage: `url(${album.thumbnail})`,
-                }}
-              >
-                {/* Badge displaying number of images */}
-                <Badge
-                  variant="outline"
-                  className="absolute top-2 right-2 bg-black/50 text-white"
-                >
-                  {album.number_of_images}{" "}
-                  {album.number_of_images === 1 ? "image" : "images"}
-                </Badge>
-              </div>
+      {filteredAlbums.map((album) => (
+  <Card
+    key={album.id}
+    className="relative overflow-hidden rounded-lg shadow-lg hover:shadow-xl transition-shadow"
+  >
+    <Link href={`/album/${album.id}`} className="block">
+      {/* Background Image with Aspect Ratio */}
+      <div className="relative aspect-[4/3]">
+        <img
+          src={album.thumbnail}
+          alt={`Thumbnail for ${album.name}`}
+          className="absolute inset-0 w-full h-full object-cover"
+          loading="lazy"
+        />
+        {/* Badge displaying number of images */}
+        <Badge
+          variant="outline"
+          className="absolute top-2 right-2 bg-black/50 text-white"
+        >
+          {album.number_of_images}{" "}
+          {album.number_of_images === 1 ? "image" : "images"}
+        </Badge>
+      </div>
 
-              {/* Content with Overlay */}
-              <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent backdrop-blur-sm border-gray-700">
-                <div className="flex justify-between items-center">
-                  <h2 className="text-lg font-semibold text-white">
-                    {album.name}
-                  </h2>
-                  <p className="text-sm text-gray-300">{album.date}</p>
-                </div>
-                <p className="text-sm text-gray-300 line-clamp-2 mt-2">
-                  {album.description}
-                </p>
-              </div>
-            </Link>
-          </Card>
-        ))}
+      {/* Content with Overlay */}
+      <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent backdrop-blur-sm border-gray-700">
+        <div className="flex justify-between items-center">
+          <h2 className="text-lg font-semibold text-white">
+            {album.name}
+          </h2>
+          <p className="text-sm text-gray-300">{album.date}</p>
+        </div>
+        <p className="text-sm text-gray-300 line-clamp-2 mt-2">
+          {album.description}
+        </p>
+      </div>
+    </Link>
+  </Card>
+))}
       </div>
     </div>
   );
