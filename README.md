@@ -14,7 +14,7 @@ This is a photo gallery project.
 1. Clone the repository:
 
    ```sh
-   git clone https://github.com/yourusername/photo-gallery.git
+   git clone https://github.com/Dylan-B-D/photo-gallery.git
    cd photo-gallery
    ```
 
