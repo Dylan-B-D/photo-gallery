@@ -63,14 +63,14 @@ const CreateAlbumDialog = () => {
     return new Promise((resolve) => {
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
-      const img = document.createElement('img');
-  
+      const img = document.createElement("img");
+
       img.onload = () => {
         const maxWidth = 200;
         const maxHeight = 200;
         let width = img.width;
         let height = img.height;
-  
+
         if (width > height) {
           if (width > maxWidth) {
             height = Math.round((height * maxWidth) / width);
@@ -82,7 +82,7 @@ const CreateAlbumDialog = () => {
             height = maxHeight;
           }
         }
-  
+
         canvas.width = width;
         canvas.height = height;
         ctx?.drawImage(img, 0, 0, width, height);
@@ -90,7 +90,7 @@ const CreateAlbumDialog = () => {
         URL.revokeObjectURL(img.src);
         resolve(previewUrl);
       };
-  
+
       img.src = URL.createObjectURL(file);
     });
   };
@@ -271,8 +271,8 @@ const CreateAlbumDialog = () => {
                             <Image
                               src={fileData.previewUrl}
                               alt={`Preview ${index + 1}`}
-                              layout="fill"
-                              objectFit="cover"
+                              fill
+                              style={{ objectFit: "cover" }}
                               className="object-cover w-full h-full rounded-md"
                             />
                           )}
@@ -346,38 +346,43 @@ const EditAlbumDialog = ({
   const [isUploading, setIsUploading] = useState(false);
   const [imagesToDelete, setImagesToDelete] = useState<Set<string>>(new Set());
 
-  const fetchAlbumImages = useCallback(async (albumId: string) => {
-    try {
-      const token = getToken();
-      const response = await fetch(
-        `http://localhost:8080/api/albums/${albumId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      if (!response.ok) throw new Error("Failed to fetch album images");
-      const data = await response.json();
-  
-      // Use optional chaining and default to an empty string if album is null
-      const albumName = album?.name || "";
-  
-      const downscaledImages = await Promise.all(
-        data.images.map(async (image: AlbumImage) => ({
-          ...image,
-          previewUrl: await downscaleExistingImage(
-            `http://localhost:8080/uploads/${encodeURIComponent(albumName)}/${encodeURIComponent(image.file_name)}`
-          ),
-        }))
-      );
-  
-      setExistingImages(downscaledImages);
-    } catch (error) {
-      console.error("Error fetching album images:", error);
-    }
-  }, [album]);
-  
+  const fetchAlbumImages = useCallback(
+    async (albumId: string) => {
+      try {
+        const token = getToken();
+        const response = await fetch(
+          `http://localhost:8080/api/albums/${albumId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+        if (!response.ok) throw new Error("Failed to fetch album images");
+        const data = await response.json();
+
+        // Use optional chaining and default to an empty string if album is null
+        const albumName = album?.name || "";
+
+        const downscaledImages = await Promise.all(
+          data.images.map(async (image: AlbumImage) => ({
+            ...image,
+            previewUrl: await downscaleExistingImage(
+              `http://localhost:8080/uploads/${encodeURIComponent(
+                albumName
+              )}/${encodeURIComponent(image.file_name)}`
+            ),
+          }))
+        );
+
+        setExistingImages(downscaledImages);
+      } catch (error) {
+        console.error("Error fetching album images:", error);
+      }
+    },
+    [album]
+  );
+
   useEffect(() => {
     if (album) {
       setAlbumData({
@@ -391,20 +396,19 @@ const EditAlbumDialog = ({
       selectedFiles.forEach((file) => URL.revokeObjectURL(file.previewUrl));
     };
   }, [album, fetchAlbumImages, selectedFiles]);
-  
 
   const downscaleExistingImage = async (url: string): Promise<string> => {
     return new Promise((resolve) => {
-      const img = document.createElement('img');
+      const img = document.createElement("img");
       img.crossOrigin = "anonymous"; // Ensure cross-origin is handled correctly
-  
+
       img.onload = () => {
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d");
         const maxSize = 100; // Use a smaller max size for thumbnails
         let width = img.width;
         let height = img.height;
-  
+
         if (width > height && width > maxSize) {
           height = Math.round((height * maxSize) / width);
           width = maxSize;
@@ -412,15 +416,15 @@ const EditAlbumDialog = ({
           width = Math.round((width * maxSize) / height);
           height = maxSize;
         }
-  
+
         canvas.width = width;
         canvas.height = height;
         ctx?.drawImage(img, 0, 0, width, height);
         resolve(canvas.toDataURL("image/jpeg", 0.5)); // Downscale and reduce quality
       };
-  
+
       img.onerror = () => resolve(url); // Fallback to original URL if an error occurs
-  
+
       img.src = url;
     });
   };
@@ -654,8 +658,8 @@ const EditAlbumDialog = ({
                               )}/${encodeURIComponent(image.file_name)}`
                             }
                             alt={`Image ${image.id}`}
-                            layout="fill"
-                            objectFit="cover"
+                            fill
+                            style={{ objectFit: "cover" }}
                             className="object-cover w-full h-full rounded-md"
                           />
                           <button
@@ -702,8 +706,8 @@ const EditAlbumDialog = ({
                             <Image
                               src={fileData.previewUrl}
                               alt={`Preview ${index + 1}`}
-                              layout="fill"
-                              objectFit="cover"
+                              fill
+                              style={{ objectFit: "cover" }}
                               className="object-cover w-full h-full rounded-md"
                             />
                           )}
@@ -795,10 +799,11 @@ const AlbumCard = ({
           <Image
             src={firstImage}
             alt={`Cover for ${album.name}`}
-            layout="fill"
-            objectFit="cover"
+            fill
+            style={{ objectFit: "cover" }}
             className="absolute inset-0 w-full h-full object-cover rounded-t-lg"
             loading="lazy"
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           />
           <Badge className="absolute top-2 right-2">
             {album.number_of_images} images
@@ -859,11 +864,11 @@ export default function AdminPanel() {
           Authorization: `Bearer ${token}`,
         },
       });
-  
+
       if (!response.ok) {
         throw new Error("Failed to fetch albums");
       }
-  
+
       const albumsData: Album[] = await response.json();
       setAlbums(albumsData);
     } catch (err) {

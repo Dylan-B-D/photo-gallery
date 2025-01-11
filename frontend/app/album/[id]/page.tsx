@@ -266,8 +266,8 @@ const AlbumPage = () => {
                 album.name
               )}/${encodeURIComponent(images[currentSlide].file_name)}`}
               alt={`Image ${currentSlide + 1}`}
-              layout="fill"
-              objectFit="contain"
+              fill
+              style={{ objectFit: "contain" }}
               className="z-10"
             />
           </div>
@@ -443,8 +443,8 @@ const AlbumPage = () => {
                   album.name
                 )}/${encodeURIComponent(image.file_name)}`}
                 alt={`Slide ${index + 1}`}
-                layout="fill"
-                objectFit="contain"
+                fill
+                style={{ objectFit: "contain" }}
               />
             </div>
           ))}
@@ -524,6 +524,7 @@ const AlbumPage = () => {
             <Button
               variant="outline"
               onClick={() => {
+                setCurrentSlide(0); 
                 setIsSlideshowActive(true);
                 toggleFullscreen();
               }}
@@ -546,10 +547,11 @@ const AlbumPage = () => {
                       album.name
                     )}/${encodeURIComponent(image.file_name)}`}
                     alt={`Image ${image.id}`}
-                    layout="fill"
-                    objectFit="cover"
+                    fill
+                    style={{ objectFit: "cover" }}
                     className="absolute inset-0 w-full h-full object-cover rounded-lg"
                     loading="lazy"
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                   />
                 </div>
               </Card>

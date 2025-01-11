@@ -195,9 +195,10 @@ const HomePage = () => {
                 <Image
                   src={album.thumbnail || "n/a"}
                   alt={`Thumbnail for ${album.name}`}
-                  layout="fill"
-                  objectFit="cover"
+                  fill
+                  style={{ objectFit: "cover" }}
                   loading="lazy"
+                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                 />
                 {/* Badge displaying number of images */}
                 <Badge
