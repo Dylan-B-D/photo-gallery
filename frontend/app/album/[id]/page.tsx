@@ -116,7 +116,7 @@ const AlbumPage = () => {
 
       {/* Album Description */}
       <p className="text-md text-gray-500 text-center mb-8 leading-relaxed">
-        {album.description}""
+        {album.description}
       </p>
 
       {/* Slideshow Mode */}
