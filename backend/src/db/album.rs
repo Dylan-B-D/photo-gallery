@@ -1,3 +1,6 @@
+use std::fs;
+
+use log::error;
 use uuid::Uuid;
 use sqlx::SqlitePool;
 use crate::models::{Album, AlbumImage};
@@ -159,4 +162,112 @@ pub async fn get_album_by_id(
         .collect();
 
     Ok((album, images))
+}
+
+pub async fn update_album(
+    pool: &SqlitePool,
+    id: &str,
+    name: &str,
+    description: &str,
+    date: &str,
+    number_of_images: i32,
+) -> Result<Album, sqlx::Error> {
+    let number_of_images_i64 = number_of_images as i64;
+
+    sqlx::query!(
+        r#"
+        UPDATE albums 
+        SET name = ?1, description = ?2, date = ?3, number_of_images = ?4
+        WHERE id = ?5
+        "#,
+        name,
+        description,
+        date,
+        number_of_images_i64,
+        id
+    )
+    .execute(pool)
+    .await?;
+
+    let row = sqlx::query!(
+        r#"
+        SELECT id, name, description, date, number_of_images
+        FROM albums
+        WHERE id = ?1
+        "#,
+        id
+    )
+    .fetch_one(pool)
+    .await?;
+
+    Ok(Album {
+        id: row.id.expect("Album ID should exist"),
+        name: row.name,
+        description: row.description.expect("Album description should exist"),
+        date: row.date,
+        number_of_images: row.number_of_images as i32,
+    })
+}
+
+pub async fn delete_album_images(
+    pool: &SqlitePool,
+    album_id: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"
+        DELETE FROM images
+        WHERE album_id = ?1
+        "#,
+        album_id
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn delete_images(
+    pool: &SqlitePool,
+    album_id: &str,
+    image_ids: &[String],
+) -> Result<(), sqlx::Error> {
+    // Delete images from the database
+    let joined_image_ids = image_ids.join(",");
+    sqlx::query!(
+        r#"
+        DELETE FROM images
+        WHERE album_id = ?1 AND id IN (?2)
+        "#,
+        album_id,
+        joined_image_ids
+    )
+    .execute(pool)
+    .await?;
+
+    // Optionally, delete image files from the filesystem
+    for image_id in image_ids {
+        let image_path = format!("uploads/{}/{}", album_id, image_id);
+        if let Err(e) = fs::remove_file(&image_path) {
+            error!("Failed to delete image file: {:?}, error: {:?}", image_path, e);
+        }
+    }
+
+    Ok(())
+}
+
+pub async fn delete_album_record(
+    pool: &SqlitePool,
+    album_id: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"
+        DELETE FROM albums
+        WHERE id = ?1
+        "#,
+        album_id
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
 }

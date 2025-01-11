@@ -23,7 +23,7 @@ pub fn create_router(pool: Pool<Sqlite>) -> Router {
 
     let cors = CorsLayer::new()
         .allow_origin("http://localhost:3000".parse::<HeaderValue>().unwrap())
-        .allow_methods([http::Method::POST, http::Method::GET])
+        .allow_methods([http::Method::POST, http::Method::GET, http::Method::PUT, http::Method::DELETE])
         .allow_headers([
             "Content-Type".parse().unwrap(),
             "Authorization".parse().unwrap(),

@@ -1,20 +1,27 @@
 use axum::{
-    extract::{State, Path, Multipart},
+    extract::{Multipart, Path, State},
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
     Json,
 };
-use log::{error, info, warn, debug};
+use bytes::BytesMut;
+use log::{debug, error, info, warn};
+use std::error::Error;
+use std::io::{BufWriter, Write};
+use std::path::PathBuf;
+use std::{
+    fs::{self, File},
+    time::Duration,
+};
 use tokio::time::timeout;
 use uuid::Uuid;
-use std::{fs::File, time::Duration};
-use std::io::{Write, BufWriter};
-use std::path::PathBuf;
-use bytes::BytesMut;
-use std::error::Error;
 
 use crate::{
-    db::album::{add_images, create_album, get_album_by_id, get_albums}, handlers::auth::verify_admin_request, models::AppState
+    db::album::{
+        add_images, create_album, delete_album_images, delete_album_record, delete_images, get_album_by_id, get_albums, update_album
+    },
+    handlers::auth::verify_admin_request,
+    models::AppState,
 };
 
 #[derive(Debug, Default)]
@@ -24,7 +31,9 @@ pub struct AlbumFields {
     pub date: Option<String>,
 }
 
-async fn process_field_stream(field: &mut axum::extract::multipart::Field<'_>) -> Result<Vec<u8>, String> {
+async fn process_field_stream(
+    field: &mut axum::extract::multipart::Field<'_>,
+) -> Result<Vec<u8>, String> {
     let mut buffer = BytesMut::new();
     let mut total_bytes = 0;
     let mut chunk_count = 0;
@@ -45,7 +54,7 @@ async fn process_field_stream(field: &mut axum::extract::multipart::Field<'_>) -
                     Ok(Some(chunk)) => {
                         chunk_count += 1;
                         let chunk_size = chunk.len();
-                        
+
                         debug!(
                             "Processing chunk {} - Size: {} bytes, is_empty: {}",
                             chunk_count,
@@ -70,14 +79,14 @@ async fn process_field_stream(field: &mut axum::extract::multipart::Field<'_>) -
                         while offset < chunk.len() {
                             let end = std::cmp::min(offset + 65536, chunk.len());
                             buffer.extend_from_slice(&chunk[offset..end]);
-                            
+
                             if end - offset == 65536 {
                                 debug!(
                                     "Added 64KB segment of chunk {}. Total bytes: {}",
                                     chunk_count, total_bytes
                                 );
                             }
-                            
+
                             offset = end;
                         }
 
@@ -154,7 +163,7 @@ pub async fn create_album_handler(
     mut multipart: Multipart,
 ) -> impl IntoResponse {
     debug!("Starting create_album_handler");
-    
+
     // Log all headers for debugging
     for (name, value) in headers.iter() {
         debug!("Header: {} = {:?}", name, value);
@@ -169,9 +178,12 @@ pub async fn create_album_handler(
             }
         }
     }
-    
+
     debug!("Content-Length header: {:?}", headers.get("content-length"));
-    debug!("Transfer-Encoding header: {:?}", headers.get("transfer-encoding"));
+    debug!(
+        "Transfer-Encoding header: {:?}",
+        headers.get("transfer-encoding")
+    );
 
     // Rest of the handler implementation remains the same...
     if let Err((status, body)) = verify_admin_request(&headers) {
@@ -189,7 +201,7 @@ pub async fn create_album_handler(
                 let field_name = field.name().unwrap_or("").to_string();
                 let file_name = field.file_name().map(|s| s.to_string());
                 let content_type = field.content_type().map(|s| s.to_string());
-                
+
                 debug!(
                     "Processing field #{}: name='{}', filename={:?}, content_type={:?}",
                     field_count, field_name, file_name, content_type
@@ -205,7 +217,9 @@ pub async fn create_album_handler(
 
                         match field_name.as_str() {
                             "name" => fields.name = text_result.as_ref().ok().cloned(),
-                            "description" => fields.description = text_result.as_ref().ok().cloned(),
+                            "description" => {
+                                fields.description = text_result.as_ref().ok().cloned()
+                            }
                             "date" => fields.date = text_result.as_ref().ok().cloned(),
                             _ => unreachable!(),
                         }
@@ -216,8 +230,9 @@ pub async fn create_album_handler(
                                 Json(serde_json::json!({
                                     "error": format!("Failed to read {} field", field_name),
                                     "details": format!("{}", text_result.unwrap_err())
-                                }))
-                            ).into_response();
+                                })),
+                            )
+                                .into_response();
                         }
                     }
                     "images" => {
@@ -253,8 +268,9 @@ pub async fn create_album_handler(
                                         "error": "Failed to process file upload",
                                         "file": file_name,
                                         "details": e
-                                    }))
-                                ).into_response();
+                                    })),
+                                )
+                                    .into_response();
                             }
                         }
                     }
@@ -264,7 +280,10 @@ pub async fn create_album_handler(
                 }
             }
             Ok(None) => {
-                debug!("No more fields to process. Total fields processed: {}", field_count);
+                debug!(
+                    "No more fields to process. Total fields processed: {}",
+                    field_count
+                );
                 break;
             }
             Err(e) => {
@@ -274,14 +293,15 @@ pub async fn create_album_handler(
                     Json(serde_json::json!({
                         "error": "Failed to process form data",
                         "details": format!("{}", e)
-                    }))
-                ).into_response();
+                    })),
+                )
+                    .into_response();
             }
         }
     }
 
     debug!("Finished processing all fields. Creating album in database...");
-    
+
     // Create album in database
     let album_name = fields.name.clone().unwrap_or_default();
     let album_desc = fields.description.clone().unwrap_or_default();
@@ -292,7 +312,10 @@ pub async fn create_album_handler(
         Ok(new_album) => {
             match add_images(&state.pool, new_album.id.clone(), &uploaded_files).await {
                 Ok(_) => {
-                    info!("Successfully created album {} with {} images", new_album.id, num_imgs);
+                    info!(
+                        "Successfully created album {} with {} images",
+                        new_album.id, num_imgs
+                    );
                     (
                         StatusCode::OK,
                         Json(serde_json::json!({
@@ -306,7 +329,8 @@ pub async fn create_album_handler(
                             },
                             "images": uploaded_files
                         })),
-                    ).into_response()
+                    )
+                        .into_response()
                 }
                 Err(e) => {
                     error!("Error inserting image records: {:?}", e);
@@ -315,8 +339,9 @@ pub async fn create_album_handler(
                         Json(serde_json::json!({
                             "error": "Failed to store images metadata",
                             "details": format!("{}", e)
-                        }))
-                    ).into_response()
+                        })),
+                    )
+                        .into_response()
                 }
             }
         }
@@ -327,8 +352,9 @@ pub async fn create_album_handler(
                 Json(serde_json::json!({
                     "error": "Failed to create album",
                     "details": format!("{}", e)
-                }))
-            ).into_response()
+                })),
+            )
+                .into_response()
         }
     }
 }
@@ -339,7 +365,7 @@ fn save_file_to_album_folder(
 ) -> Result<String, (StatusCode, Json<serde_json::Value>)> {
     let safe_album_name = album_name.replace("/", "_");
     let dir_path = format!("uploads/{}", safe_album_name);
-    
+
     if let Err(e) = std::fs::create_dir_all(&dir_path) {
         error!("Failed to create album directory {}: {:?}", dir_path, e);
         return Err((
@@ -384,62 +410,244 @@ fn save_file_to_album_folder(
     Ok(format!("{}/{}", safe_album_name, file_name))
 }
 
-/// Update an album by ID (stubbed for now)
+/// Update an album by ID
 pub async fn update_album_handler(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     headers: HeaderMap,
-    Path(_id): Path<String>,
-    // you'd parse similar data from a `Multipart` or `Json` depending on your design
+    Path(album_id): Path<String>,
+    mut multipart: Multipart,
 ) -> impl IntoResponse {
-    // 1. Verify admin
+    // Verify admin
     if let Err((status, body)) = verify_admin_request(&headers) {
         return (status, body).into_response();
     }
 
-    // 2. handle updates ...
-    (
-        StatusCode::OK,
-        Json(serde_json::json!({"message": "Update album - not yet implemented"})),
-    ).into_response()
+    let mut fields = AlbumFields::default();
+    let mut uploaded_files: Vec<String> = Vec::new();
+    let mut images_to_delete: Vec<String> = Vec::new(); // Declare images_to_delete
+
+    // Get existing album first to check for name change
+    let existing_album = match get_album_by_id(&state.pool, album_id.clone()).await {
+        Ok((album, _)) => album,
+        Err(e) => {
+            error!("Error fetching album to update: {:?}", e);
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({
+                    "error": "Album not found",
+                    "details": format!("{}", e)
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    // Process multipart form
+    while let Ok(Some(mut field)) = multipart.next_field().await {
+        match field.name().unwrap_or("") {
+            "name" => fields.name = field.text().await.ok(),
+            "description" => fields.description = field.text().await.ok(),
+            "date" => fields.date = field.text().await.ok(),
+            "images" => {
+                if let Ok(file_bytes) = process_field_stream(&mut field).await {
+                    let album_name = fields
+                        .name
+                        .clone()
+                        .unwrap_or_else(|| existing_album.name.clone());
+                    match save_file_to_album_folder(&album_name, file_bytes) {
+                        Ok(file_path) => uploaded_files.push(file_path),
+                        Err((status, body)) => return (status, body).into_response(),
+                    }
+                }
+            }
+            "imagesToDelete" => {
+                if let Ok(ids_str) = field.text().await {
+                    if let Ok(ids) = serde_json::from_str::<Vec<String>>(&ids_str) {
+                        images_to_delete.extend(ids);
+                    }
+                }
+            }
+            _ => continue,
+        }
+    }
+
+    // Delete marked images
+    if !images_to_delete.is_empty() {
+        if let Err(e) = delete_images(&state.pool, &album_id, &images_to_delete).await {
+            error!("Error deleting images: {:?}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": "Failed to delete images",
+                    "details": format!("{}", e)
+                })),
+            )
+                .into_response();
+        }
+    }
+
+    // If album name is being updated, rename the folder
+    if let Some(new_name) = &fields.name {
+        if new_name != &existing_album.name {
+            let old_path = format!("uploads/{}", existing_album.name.replace("/", "_"));
+            let new_path = format!("uploads/{}", new_name.replace("/", "_"));
+
+            if let Err(e) = fs::rename(&old_path, &new_path) {
+                error!("Error renaming album directory: {:?}", e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({
+                        "error": "Failed to rename album directory",
+                        "details": format!("{}", e)
+                    })),
+                )
+                    .into_response();
+            }
+        }
+    }
+
+    // Update album in database
+    match update_album(
+        &state.pool,
+        &album_id,
+        &fields.name.unwrap_or(existing_album.name),
+        &fields.description.unwrap_or(existing_album.description),
+        &fields
+            .date
+            .unwrap_or(existing_album.date.unwrap_or_default()),
+        existing_album.number_of_images + uploaded_files.len() as i32,
+    )
+    .await
+    {
+        Ok(updated_album) => {
+            // Add new images if any
+            if !uploaded_files.is_empty() {
+                if let Err(e) = add_images(&state.pool, album_id, &uploaded_files).await {
+                    error!("Error adding new images: {:?}", e);
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(serde_json::json!({
+                            "error": "Failed to add new images",
+                            "details": format!("{}", e)
+                        })),
+                    )
+                        .into_response();
+                }
+            }
+
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "message": "Album updated successfully",
+                    "album": updated_album,
+                    "new_images": uploaded_files
+                })),
+            )
+                .into_response()
+        }
+        Err(e) => {
+            error!("Error updating album: {:?}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": "Failed to update album",
+                    "details": format!("{}", e)
+                })),
+            )
+                .into_response()
+        }
+    }
 }
 
-/// Delete an album by ID (stubbed for now)
+
 pub async fn delete_album_handler(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     headers: HeaderMap,
-    Path(_id): Path<String>,
+    Path(album_id): Path<String>,
 ) -> impl IntoResponse {
-    // 1. Verify admin
+    // Verify admin
     if let Err((status, body)) = verify_admin_request(&headers) {
         return (status, body).into_response();
     }
-    // 2. handle deletion ...
-    (
-        StatusCode::OK,
-        Json(serde_json::json!({"message": "Delete album - not yet implemented"})),
-    ).into_response()
+
+    // Get album details before deletion
+    match get_album_by_id(&state.pool, album_id.clone()).await {
+        Ok((album, _)) => {
+            // Delete images from filesystem
+            let album_dir = format!("uploads/{}", album.name.replace("/", "_"));
+            if let Err(e) = fs::remove_dir_all(&album_dir) {
+                error!("Error removing album directory: {:?}", e);
+                // Continue with database cleanup even if file deletion fails
+            }
+
+            // Delete images from database
+            if let Err(e) = delete_album_images(&state.pool, &album_id).await {
+                error!("Error deleting album images from database: {:?}", e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({
+                        "error": "Failed to delete album images",
+                        "details": format!("{}", e)
+                    })),
+                )
+                    .into_response();
+            }
+
+            // Delete album record
+            match delete_album_record(&state.pool, &album_id).await {
+                Ok(_) => (
+                    StatusCode::OK,
+                    Json(serde_json::json!({
+                        "message": "Album deleted successfully",
+                        "album_id": album_id
+                    })),
+                )
+                    .into_response(),
+                Err(e) => {
+                    error!("Error deleting album record: {:?}", e);
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(serde_json::json!({
+                            "error": "Failed to delete album record",
+                            "details": format!("{}", e)
+                        })),
+                    )
+                        .into_response()
+                }
+            }
+        }
+        Err(e) => {
+            error!("Error fetching album to delete: {:?}", e);
+            (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({
+                    "error": "Album not found",
+                    "details": format!("{}", e)
+                })),
+            )
+                .into_response()
+        }
+    }
 }
 
 /// GET /api/albums
-pub async fn get_albums_handler(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn get_albums_handler(State(state): State<AppState>) -> impl IntoResponse {
     info!("Received request to fetch all albums");
     match get_albums(&state.pool).await {
         Ok(albums) => {
             info!("Successfully fetched {} albums", albums.len());
             (StatusCode::OK, Json(albums)).into_response()
-        },
+        }
         Err(e) => {
             error!("Error fetching albums: {:?}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": "Failed to fetch albums"}))
-            ).into_response()
+                Json(serde_json::json!({"error": "Failed to fetch albums"})),
+            )
+                .into_response()
         }
     }
 }
-
 
 /// GET /api/albums/:id
 pub async fn get_album_handler(
@@ -447,10 +655,14 @@ pub async fn get_album_handler(
     Path(album_id): Path<Uuid>,
 ) -> impl IntoResponse {
     info!("Received request to fetch album with ID: {}", album_id);
-    
+
     match get_album_by_id(&state.pool, album_id.to_string()).await {
         Ok((album, images)) => {
-            info!("Successfully fetched album: {:?} with {} images", album, images.len());
+            info!(
+                "Successfully fetched album: {:?} with {} images",
+                album,
+                images.len()
+            );
             let response = serde_json::json!({
                 "album": album,
                 "images": images
@@ -461,9 +673,9 @@ pub async fn get_album_handler(
             error!("Error fetching album {}: {:?}", album_id, e);
             (
                 StatusCode::NOT_FOUND,
-                Json(serde_json::json!({"error": "Album not found"}))
-            ).into_response()
+                Json(serde_json::json!({"error": "Album not found"})),
+            )
+                .into_response()
         }
     }
 }
-

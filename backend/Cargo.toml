@@ -21,3 +21,4 @@ axum-extra = "0.10"
 sqlx = { version = "0.8", features = ["runtime-tokio-native-tls", "sqlite", "macros"] }
 bytes = "1.9"
 dotenvy = "0.15"
+exif = "0.0.1"
