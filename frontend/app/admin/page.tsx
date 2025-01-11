@@ -390,6 +390,10 @@ export default function AdminPanel() {
           <Button onClick={handleLogout} variant="destructive">
             Logout
           </Button>
+          {/* Back to Home button */}
+          <Button variant="outline" onClick={() => router.push("/")} className="text-sm">
+            ← Back to Home
+          </Button>
         </div>
       </div>
       {/*

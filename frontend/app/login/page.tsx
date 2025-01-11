@@ -51,7 +51,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4">
       <Card className="w-full max-w-md border dark:border-gray-700">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-center">Admin Login</CardTitle>
@@ -98,7 +98,9 @@ export default function LoginPage() {
           </CardFooter>
         </form>
       </Card>
+      <Button variant="outline" onClick={() => router.push("/")} className="w-full max-w-md mt-4 text-sm">
+        ← Back to Home
+      </Button>
     </div>
   )
 }
-

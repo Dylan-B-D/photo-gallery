@@ -136,9 +136,11 @@ const HomePage = () => {
     <div className="container mx-auto p-6">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">Photo Albums</h1>
-        <Link href="/login" className="text-sm text-gray-500 hover:underline">
-          Login
-        </Link>
+        <div className="flex space-x-4">
+          <Link href="/admin" className="text-sm text-gray-500 hover:underline">
+            Admin Panel
+          </Link>
+        </div>
       </div>
       {/* Search and Sorting Controls */}
       <div className="flex justify-between items-center mb-4">

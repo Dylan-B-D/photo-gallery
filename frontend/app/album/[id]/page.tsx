@@ -41,7 +41,8 @@ const AlbumPage = () => {
           throw new Error("Failed to fetch album images");
         }
 
-        const data: { album: Album; images: AlbumImage[] } = await response.json();
+        const data: { album: Album; images: AlbumImage[] } =
+          await response.json();
         console.log("Fetched images:", data);
 
         setAlbum(data.album);
@@ -89,14 +90,18 @@ const AlbumPage = () => {
       {/* Header Section with Back Button, Album Name, and Slideshow Button */}
       <div className="flex justify-between items-center mb-8">
         {/* Back Button */}
-        <Button variant="outline" onClick={() => router.push("/")} className="text-sm">
+        <Button
+          variant="outline"
+          onClick={() => router.push("/")}
+          className="text-sm"
+        >
           ← Back to Home
         </Button>
 
         {/* Album Title */}
         <div className="text-center">
           <h1 className="text-3xl font-bold">{album.name}</h1>
-          <p className="text-sm text-gray-500 mt-1">{album.date}</p>
+          <p className="text-sm text-gray-500 mt-1 italic">{album.date}</p>
         </div>
 
         {/* Slideshow Button */}
@@ -110,16 +115,18 @@ const AlbumPage = () => {
       </div>
 
       {/* Album Description */}
-      <p className="text-md text-gray-700 text-center mb-8">{album.description}</p>
+      <p className="text-md text-gray-500 text-center mb-8 leading-relaxed">
+        {album.description}""
+      </p>
 
       {/* Slideshow Mode */}
       {isSlideshowActive ? (
         <div className="flex justify-center">
           <div className="relative aspect-[4/3] w-full max-w-3xl">
             <img
-              src={`http://localhost:8080/uploads/${encodeURIComponent(album.name)}/${encodeURIComponent(
-                images[currentSlide].file_name
-              )}`}
+              src={`http://localhost:8080/uploads/${encodeURIComponent(
+                album.name
+              )}/${encodeURIComponent(images[currentSlide].file_name)}`}
               alt={`Slide ${currentSlide + 1}`}
               className="absolute inset-0 w-full h-full object-cover rounded-lg"
             />
@@ -132,9 +139,9 @@ const AlbumPage = () => {
             <Card key={image.id}>
               <div className="relative aspect-[4/3]">
                 <img
-                  src={`http://localhost:8080/uploads/${encodeURIComponent(album.name)}/${encodeURIComponent(
-                    image.file_name
-                  )}`}
+                  src={`http://localhost:8080/uploads/${encodeURIComponent(
+                    album.name
+                  )}/${encodeURIComponent(image.file_name)}`}
                   alt={`Image ${image.id}`}
                   className="absolute inset-0 w-full h-full object-cover rounded-lg"
                 />
