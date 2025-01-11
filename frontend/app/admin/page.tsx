@@ -1,7 +1,7 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useEffect, useMemo, useCallback } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Dialog,
@@ -63,14 +63,14 @@ const CreateAlbumDialog = () => {
     return new Promise((resolve) => {
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
-      const img = new Image();
-
+      const img = document.createElement('img');
+  
       img.onload = () => {
         const maxWidth = 200;
         const maxHeight = 200;
         let width = img.width;
         let height = img.height;
-
+  
         if (width > height) {
           if (width > maxWidth) {
             height = Math.round((height * maxWidth) / width);
@@ -82,7 +82,7 @@ const CreateAlbumDialog = () => {
             height = maxHeight;
           }
         }
-
+  
         canvas.width = width;
         canvas.height = height;
         ctx?.drawImage(img, 0, 0, width, height);
@@ -90,7 +90,7 @@ const CreateAlbumDialog = () => {
         URL.revokeObjectURL(img.src);
         resolve(previewUrl);
       };
-
+  
       img.src = URL.createObjectURL(file);
     });
   };
@@ -109,7 +109,7 @@ const CreateAlbumDialog = () => {
     for (let i = 0; i < newFiles.length; i++) {
       const previewUrl = await createImagePreview(newFiles[i].file);
       setSelectedFiles((prev) =>
-        prev.map((fileData, index) => {
+        prev.map((fileData) => {
           if (fileData === newFiles[i]) {
             return { ...fileData, previewUrl, loading: false };
           }
@@ -268,9 +268,11 @@ const CreateAlbumDialog = () => {
                           {fileData.loading ? (
                             <div className="animate-pulse bg-gray-200 w-full h-full" />
                           ) : (
-                            <img
+                            <Image
                               src={fileData.previewUrl}
                               alt={`Preview ${index + 1}`}
+                              layout="fill"
+                              objectFit="cover"
                               className="object-cover w-full h-full rounded-md"
                             />
                           )}
@@ -344,21 +346,7 @@ const EditAlbumDialog = ({
   const [isUploading, setIsUploading] = useState(false);
   const [imagesToDelete, setImagesToDelete] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    if (album) {
-      setAlbumData({
-        name: album.name,
-        description: album.description,
-        date: album.date || new Date().toISOString().split("T")[0],
-      });
-      fetchAlbumImages(album.id);
-    }
-    return () => {
-      selectedFiles.forEach((file) => URL.revokeObjectURL(file.previewUrl));
-    };
-  }, [album]);
-
-  const fetchAlbumImages = async (albumId: string) => {
+  const fetchAlbumImages = useCallback(async (albumId: string) => {
     try {
       const token = getToken();
       const response = await fetch(
@@ -371,39 +359,52 @@ const EditAlbumDialog = ({
       );
       if (!response.ok) throw new Error("Failed to fetch album images");
       const data = await response.json();
-
+  
       // Use optional chaining and default to an empty string if album is null
       const albumName = album?.name || "";
-
+  
       const downscaledImages = await Promise.all(
         data.images.map(async (image: AlbumImage) => ({
           ...image,
           previewUrl: await downscaleExistingImage(
-            `http://localhost:8080/uploads/${encodeURIComponent(
-              albumName
-            )}/${encodeURIComponent(image.file_name)}`
+            `http://localhost:8080/uploads/${encodeURIComponent(albumName)}/${encodeURIComponent(image.file_name)}`
           ),
         }))
       );
-
+  
       setExistingImages(downscaledImages);
     } catch (error) {
       console.error("Error fetching album images:", error);
     }
-  };
+  }, [album]);
+  
+  useEffect(() => {
+    if (album) {
+      setAlbumData({
+        name: album.name,
+        description: album.description,
+        date: album.date || new Date().toISOString().split("T")[0],
+      });
+      fetchAlbumImages(album.id);
+    }
+    return () => {
+      selectedFiles.forEach((file) => URL.revokeObjectURL(file.previewUrl));
+    };
+  }, [album, fetchAlbumImages, selectedFiles]);
+  
 
   const downscaleExistingImage = async (url: string): Promise<string> => {
     return new Promise((resolve) => {
-      const img = new Image();
+      const img = document.createElement('img');
       img.crossOrigin = "anonymous"; // Ensure cross-origin is handled correctly
-
+  
       img.onload = () => {
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d");
         const maxSize = 100; // Use a smaller max size for thumbnails
         let width = img.width;
         let height = img.height;
-
+  
         if (width > height && width > maxSize) {
           height = Math.round((height * maxSize) / width);
           width = maxSize;
@@ -411,15 +412,15 @@ const EditAlbumDialog = ({
           width = Math.round((width * maxSize) / height);
           height = maxSize;
         }
-
+  
         canvas.width = width;
         canvas.height = height;
         ctx?.drawImage(img, 0, 0, width, height);
         resolve(canvas.toDataURL("image/jpeg", 0.5)); // Downscale and reduce quality
       };
-
+  
       img.onerror = () => resolve(url); // Fallback to original URL if an error occurs
-
+  
       img.src = url;
     });
   };
@@ -487,7 +488,7 @@ const EditAlbumDialog = ({
     for (let i = 0; i < newFiles.length; i++) {
       const previewUrl = await createImagePreview(newFiles[i].file);
       setSelectedFiles((prev) =>
-        prev.map((fileData, index) => {
+        prev.map((fileData) => {
           if (fileData === newFiles[i]) {
             return { ...fileData, previewUrl, loading: false };
           }
@@ -505,43 +506,27 @@ const EditAlbumDialog = ({
     });
   };
 
-  const removeExistingImage = async (imageId: string) => {
-    try {
-      const token = getToken();
-      const response = await fetch(
-        `http://localhost:8080/api/albums/${album?.id}/images/${imageId}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      if (!response.ok) throw new Error("Failed to delete image");
-      setExistingImages((prev) => prev.filter((img) => img.id !== imageId));
-    } catch (error) {
-      console.error("Error deleting image:", error);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsUploading(true);
-  
+
     try {
       const formData = new FormData();
       formData.append("name", albumData.name);
       formData.append("description", albumData.description);
       formData.append("date", albumData.date);
-  
+
       selectedFiles.forEach((fileData) => {
         formData.append("images", fileData.file);
       });
-  
+
       if (imagesToDelete.size > 0) {
-        formData.append("imagesToDelete", JSON.stringify(Array.from(imagesToDelete)));
+        formData.append(
+          "imagesToDelete",
+          JSON.stringify(Array.from(imagesToDelete))
+        );
       }
-  
+
       const token = getToken();
       const response = await fetch(
         `http://localhost:8080/api/albums/${album?.id}`,
@@ -553,9 +538,9 @@ const EditAlbumDialog = ({
           body: formData,
         }
       );
-  
+
       if (!response.ok) throw new Error("Failed to update album");
-  
+
       selectedFiles.forEach((fileData) =>
         URL.revokeObjectURL(fileData.previewUrl)
       );
@@ -567,7 +552,6 @@ const EditAlbumDialog = ({
       setIsUploading(false);
     }
   };
-  
 
   const isFormValid = () => {
     return (
@@ -662,7 +646,7 @@ const EditAlbumDialog = ({
                           }`}
                           onClick={() => toggleImageDeletion(image.id)} // Toggle on click
                         >
-                          <img
+                          <Image
                             src={
                               image.previewUrl ||
                               `http://localhost:8080/uploads/${encodeURIComponent(
@@ -670,6 +654,8 @@ const EditAlbumDialog = ({
                               )}/${encodeURIComponent(image.file_name)}`
                             }
                             alt={`Image ${image.id}`}
+                            layout="fill"
+                            objectFit="cover"
                             className="object-cover w-full h-full rounded-md"
                           />
                           <button
@@ -713,9 +699,11 @@ const EditAlbumDialog = ({
                           {fileData.loading ? (
                             <div className="animate-pulse bg-gray-200 w-full h-full" />
                           ) : (
-                            <img
+                            <Image
                               src={fileData.previewUrl}
                               alt={`Preview ${index + 1}`}
+                              layout="fill"
+                              objectFit="cover"
                               className="object-cover w-full h-full rounded-md"
                             />
                           )}
@@ -804,11 +792,13 @@ const AlbumCard = ({
     <Card className="relative" style={{ maxWidth: "400px" }}>
       {firstImage && (
         <div className="relative aspect-[4/3]">
-          <img
+          <Image
             src={firstImage}
             alt={`Cover for ${album.name}`}
-            loading="lazy"
+            layout="fill"
+            objectFit="cover"
             className="absolute inset-0 w-full h-full object-cover rounded-t-lg"
+            loading="lazy"
           />
           <Badge className="absolute top-2 right-2">
             {album.number_of_images} images
@@ -839,8 +829,8 @@ const AlbumCard = ({
 // AdminPanel Component
 export default function AdminPanel() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(true);
-  const [authStatus, setAuthStatus] = useState(false);
+  const [, setIsLoading] = useState(true);
+  const [, setAuthStatus] = useState(false);
   const [albums, setAlbums] = useState<Album[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -869,16 +859,21 @@ export default function AdminPanel() {
           Authorization: `Bearer ${token}`,
         },
       });
-
+  
       if (!response.ok) {
         throw new Error("Failed to fetch albums");
       }
-
+  
       const albumsData: Album[] = await response.json();
       setAlbums(albumsData);
-    } catch (err: any) {
-      console.error("Error fetching albums:", err.message);
-      setError(err.message);
+    } catch (err) {
+      if (err instanceof Error) {
+        console.error("Error fetching albums:", err.message);
+        setError(err.message);
+      } else {
+        console.error("Error fetching albums:", err);
+        setError("An unknown error occurred");
+      }
     }
   };
 

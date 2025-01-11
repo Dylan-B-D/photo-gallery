@@ -1,6 +1,7 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import Image from "next/image";
+import { Card } from "@/components/ui/card";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
@@ -95,9 +96,14 @@ const HomePage = () => {
 
         setAlbums(albumsWithMetadata);
         setFilteredAlbums(albumsWithMetadata); // Initialize filtered albums
-      } catch (err: any) {
-        console.error("Error fetching albums:", err.message);
-        setError(err.message);
+      } catch (err: unknown) {
+        if (err instanceof Error) {
+          console.error("Error fetching albums:", err.message);
+          setError(err.message);
+        } else {
+          console.error("Unexpected error fetching albums");
+          setError("Unexpected error");
+        }
       } finally {
         setLoading(false);
       }
@@ -186,10 +192,11 @@ const HomePage = () => {
             <Link href={`/album/${album.id}`} className="block">
               {/* Background Image with Aspect Ratio */}
               <div className="relative aspect-[4/3]">
-                <img
-                  src={album.thumbnail}
+                <Image
+                  src={album.thumbnail || "n/a"}
                   alt={`Thumbnail for ${album.name}`}
-                  className="absolute inset-0 w-full h-full object-cover"
+                  layout="fill"
+                  objectFit="cover"
                   loading="lazy"
                 />
                 {/* Badge displaying number of images */}
