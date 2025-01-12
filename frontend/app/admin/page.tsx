@@ -834,26 +834,12 @@ const AlbumCard = ({
 // AdminPanel Component
 export default function AdminPanel() {
   const router = useRouter();
-  const [, setIsLoading] = useState(true);
-  const [, setAuthStatus] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [getAuthStatus, setAuthStatus] = useState(false);
   const [albums, setAlbums] = useState<Album[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editAlbum, setEditAlbum] = useState<Album | null>(null);
-
-  useEffect(() => {
-    const checkAuth = async () => {
-      const isAuth = await isAuthenticated();
-      if (!isAuth) {
-        setAuthStatus(false);
-      } else {
-        setAuthStatus(true);
-        await fetchAdminAlbums();
-      }
-      setIsLoading(false);
-    };
-    checkAuth();
-  }, [router]);
 
   const fetchAdminAlbums = async () => {
     try {
@@ -881,6 +867,40 @@ export default function AdminPanel() {
       }
     }
   };
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const isAuth = await isAuthenticated();
+      if (!isAuth) {
+        setAuthStatus(false);
+        router.push("/login");
+      } else {
+        setAuthStatus(true);
+        await fetchAdminAlbums();
+      }
+      setIsLoading(false);
+    };
+    checkAuth();
+  }, [router]);
+
+  if (isLoading) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "100vh",
+        }}
+      >
+        <div className="spinner"></div>
+      </div>
+    );
+  }
+
+  if (getAuthStatus === false) {
+    return null;
+  }
 
   const handleLogout = () => {
     removeToken();

@@ -1,8 +1,10 @@
+import { NextApiRequest } from 'next';
+
 export const setToken = (token: string) => {
     document.cookie = `authToken=${token}; path=/; max-age=${60 * 60 * 24}; SameSite=Lax`;
 };
 
-export const getToken = (req?: any) => {
+export const getToken = (req?: NextApiRequest) => {
     console.log("getToken: Getting token");
 
     if (typeof window !== 'undefined') {
@@ -20,7 +22,7 @@ export const getToken = (req?: any) => {
         console.log("getToken: Running on server side");
         
         // Get the token directly from request.cookies
-        const token = req.cookies.get('authToken')?.value;
+        const token = req?.cookies?.authToken;
         return token;
     }
 
@@ -33,7 +35,9 @@ export const removeToken = () => {
     document.cookie = 'authToken=; path=/; max-age=0';
 };
 
-export const isAuthenticated = async (req?: any) => {
+export const isAuthenticated = async (req?: NextApiRequest) => {
+    console.log("isAuthenticated: Checking if user is authenticated");
+    
     const token = getToken(req);
     if (!token) {
         console.log("isAuthenticated: No token found");
@@ -53,7 +57,7 @@ export const isAuthenticated = async (req?: any) => {
             console.log("isAuthenticated: Token is invalid");
             return false;
         }
-    } catch (error) {
+    } catch {
         return false;
     }
 };
