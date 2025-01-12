@@ -46,6 +46,8 @@ interface ImageMetadata {
   file_size?: number;
 }
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+
 const AlbumPage = () => {
   const { id } = useParams();
   const router = useRouter();
@@ -74,7 +76,7 @@ const AlbumPage = () => {
 
     const fetchAlbumAndImages = async () => {
       try {
-        const response = await fetch(`http://localhost:8080/api/albums/${id}`);
+        const response = await fetch(`${API_BASE_URL}/api/albums/${id}`);
         if (!response.ok) throw new Error("Failed to fetch album images");
 
         const data: { album: Album; images: AlbumImage[] } =
@@ -169,7 +171,7 @@ const AlbumPage = () => {
 
     try {
       const response = await fetch(
-        `http://localhost:8080/api/images/${imageId}/metadata`
+        `${API_BASE_URL}/api/images/${imageId}/metadata`
       );
 
       if (!response.ok) {
@@ -255,7 +257,7 @@ const AlbumPage = () => {
           {/* Image */}
           <div className="relative w-full h-full">
             <Image
-              src={`http://localhost:8080/uploads/${encodeURIComponent(
+              src={`${API_BASE_URL}/uploads/${encodeURIComponent(
                 album.name
               )}/${encodeURIComponent(images[currentSlide].file_name)}`}
               alt={`Image ${currentSlide + 1}`}
@@ -285,7 +287,7 @@ const AlbumPage = () => {
             <Button
               variant="outline"
               onClick={async () => {
-                const url = `http://localhost:8080/uploads/${encodeURIComponent(
+                const url = `${API_BASE_URL}/uploads/${encodeURIComponent(
                   album.name
                 )}/${encodeURIComponent(images[currentSlide].file_name)}`;
 
@@ -432,7 +434,7 @@ const AlbumPage = () => {
               }`}
             >
               <Image
-                src={`http://localhost:8080/uploads/${encodeURIComponent(
+                src={`${API_BASE_URL}/uploads/${encodeURIComponent(
                   album.name
                 )}/${encodeURIComponent(image.file_name)}`}
                 alt={`Slide ${index + 1}`}
@@ -536,7 +538,7 @@ const AlbumPage = () => {
               <Card key={image.id} onClick={() => handleImageClick(index)}>
                 <div className="relative aspect-[4/3] cursor-pointer">
                   <Image
-                    src={`http://localhost:8080/uploads/${encodeURIComponent(
+                    src={`${API_BASE_URL}/uploads/${encodeURIComponent(
                       album.name
                     )}/${encodeURIComponent(image.file_name)}`}
                     alt={`Image ${image.id}`}

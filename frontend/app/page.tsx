@@ -34,6 +34,8 @@ interface AlbumImage {
   file_name: string;
 }
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+
 const HomePage = () => {
   const [albums, setAlbums] = useState<Album[]>([]);
   const [filteredAlbums, setFilteredAlbums] = useState<Album[]>([]);
@@ -44,7 +46,7 @@ const HomePage = () => {
   useEffect(() => {
     const fetchAlbums = async () => {
       try {
-        const response = await fetch("http://localhost:8080/api/albums");
+        const response = await fetch(`${API_BASE_URL}/api/albums`);
         if (!response.ok) {
           throw new Error("Failed to fetch albums");
         }
@@ -55,10 +57,10 @@ const HomePage = () => {
         const albumsWithMetadata = await Promise.all(
           albumsData.map(async (album) => {
             const imagesResponse = await fetch(
-              `http://localhost:8080/api/albums/${album.id}`
+              `${API_BASE_URL}/api/albums/${album.id}`
             );
             const modeMetadataResponse = await fetch(
-              `http://localhost:8080/api/albums/${album.id}/mode-metadata`
+              `${API_BASE_URL}/api/albums/${album.id}/mode-metadata`
             );
 
             let modeMetadata = {
@@ -78,7 +80,7 @@ const HomePage = () => {
 
             const firstImage = imagesData.images[0]?.file_name;
             const thumbnail = firstImage
-              ? `http://localhost:8080/uploads/${encodeURIComponent(
+              ? `${API_BASE_URL}/uploads/${encodeURIComponent(
                   album.name
                 )}/${encodeURIComponent(firstImage)}`
               : "https://via.placeholder.com/300x200";

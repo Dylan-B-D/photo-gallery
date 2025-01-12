@@ -54,7 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let app = create_router(pool);
     let listener = TcpListener::bind("0.0.0.0:8080").await?;
-    info!("Server running on http://localhost:8080");
+    info!("Server running on port 8080");
 
     axum::serve(listener, app).await?;
     Ok(())

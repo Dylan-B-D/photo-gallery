@@ -21,6 +21,7 @@ This is a photo gallery project.
 2. Set up the `.env` file:
 
    ```sh
+   cd backend
    cp .env.example .env
    ```
 
@@ -58,6 +59,12 @@ This is a photo gallery project.
    ```sh
    yarn dev
    ```
+
+4. Setup .env.local in frontend. Example:
+
+   ```
+   NEXT_PUBLIC_API_URL=http://localhost:8080
+
 
 ### Database
 

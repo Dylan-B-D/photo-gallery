@@ -42,6 +42,8 @@ interface AlbumImage {
   previewUrl?: string;
 }
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+
 // CreateAlbumDialog Component
 const CreateAlbumDialog = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -142,7 +144,7 @@ const CreateAlbumDialog = () => {
       });
 
       const token = getToken();
-      const response = await fetch("http://localhost:8080/api/albums", {
+      const response = await fetch(`${API_BASE_URL}/api/albums`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -351,7 +353,7 @@ const EditAlbumDialog = ({
       try {
         const token = getToken();
         const response = await fetch(
-          `http://localhost:8080/api/albums/${albumId}`,
+          `${API_BASE_URL}/api/albums/${albumId}`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -368,7 +370,7 @@ const EditAlbumDialog = ({
           data.images.map(async (image: AlbumImage) => ({
             ...image,
             previewUrl: await downscaleExistingImage(
-              `http://localhost:8080/uploads/${encodeURIComponent(
+              `${API_BASE_URL}/uploads/${encodeURIComponent(
                 albumName
               )}/${encodeURIComponent(image.file_name)}`
             ),
@@ -533,7 +535,7 @@ const EditAlbumDialog = ({
 
       const token = getToken();
       const response = await fetch(
-        `http://localhost:8080/api/albums/${album?.id}`,
+        `${API_BASE_URL}/api/albums/${album?.id}`,
         {
           method: "PUT",
           headers: {
@@ -653,7 +655,7 @@ const EditAlbumDialog = ({
                           <Image
                             src={
                               image.previewUrl ||
-                              `http://localhost:8080/uploads/${encodeURIComponent(
+                              `${API_BASE_URL}/uploads/${encodeURIComponent(
                                 album?.name || ""
                               )}/${encodeURIComponent(image.file_name)}`
                             }
@@ -774,13 +776,13 @@ const AlbumCard = ({
     const fetchFirstImage = async () => {
       try {
         const response = await fetch(
-          `http://localhost:8080/api/albums/${album.id}`
+          `${API_BASE_URL}/api/albums/${album.id}`
         );
         if (!response.ok) throw new Error("Failed to fetch album images");
         const data = await response.json();
         if (data.images && data.images.length > 0) {
           setFirstImage(
-            `http://localhost:8080/uploads/${encodeURIComponent(
+            `${API_BASE_URL}/uploads/${encodeURIComponent(
               album.name
             )}/${encodeURIComponent(data.images[0].file_name)}`
           );
@@ -844,7 +846,7 @@ export default function AdminPanel() {
   const fetchAdminAlbums = async () => {
     try {
       const token = getToken();
-      const response = await fetch("http://localhost:8080/api/albums", {
+      const response = await fetch(`${API_BASE_URL}/api/albums`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -917,7 +919,7 @@ export default function AdminPanel() {
 
     try {
       const token = getToken();
-      const response = await fetch(`http://localhost:8080/api/albums/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/albums/${id}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,

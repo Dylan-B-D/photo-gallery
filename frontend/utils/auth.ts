@@ -44,8 +44,10 @@ export const isAuthenticated = async (req?: NextApiRequest) => {
         return false;
     }
 
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+
     try {
-        const response = await fetch('http://localhost:8080/api/verify', {
+        const response = await fetch(`${API_BASE_URL}/api/verify`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
