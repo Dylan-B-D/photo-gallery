@@ -43,6 +43,7 @@ interface AlbumImage {
 }
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+const UPLOAD_BASE_URL = process.env.NEXT_PUBLIC_UPLOAD_URL;
 
 // CreateAlbumDialog Component
 const CreateAlbumDialog = () => {
@@ -370,7 +371,7 @@ const EditAlbumDialog = ({
           data.images.map(async (image: AlbumImage) => ({
             ...image,
             previewUrl: await downscaleExistingImage(
-              `${API_BASE_URL}/uploads/${encodeURIComponent(
+              `${UPLOAD_BASE_URL}/uploads/${encodeURIComponent(
                 albumName
               )}/${encodeURIComponent(image.file_name)}`
             ),
@@ -655,7 +656,7 @@ const EditAlbumDialog = ({
                           <Image
                             src={
                               image.previewUrl ||
-                              `${API_BASE_URL}/uploads/${encodeURIComponent(
+                              `${UPLOAD_BASE_URL}/uploads/${encodeURIComponent(
                                 album?.name || ""
                               )}/${encodeURIComponent(image.file_name)}`
                             }
@@ -782,7 +783,7 @@ const AlbumCard = ({
         const data = await response.json();
         if (data.images && data.images.length > 0) {
           setFirstImage(
-            `${API_BASE_URL}/uploads/${encodeURIComponent(
+            `${UPLOAD_BASE_URL}/uploads/${encodeURIComponent(
               album.name
             )}/${encodeURIComponent(data.images[0].file_name)}`
           );

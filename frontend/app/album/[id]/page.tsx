@@ -47,6 +47,7 @@ interface ImageMetadata {
 }
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+const UPLOAD_BASE_URL = process.env.NEXT_PUBLIC_UPLOAD_URL;
 
 const AlbumPage = () => {
   const { id } = useParams();
@@ -257,7 +258,7 @@ const AlbumPage = () => {
           {/* Image */}
           <div className="relative w-full h-full">
             <Image
-              src={`${API_BASE_URL}/uploads/${encodeURIComponent(
+              src={`${UPLOAD_BASE_URL}/uploads/${encodeURIComponent(
                 album.name
               )}/${encodeURIComponent(images[currentSlide].file_name)}`}
               alt={`Image ${currentSlide + 1}`}
@@ -287,7 +288,7 @@ const AlbumPage = () => {
             <Button
               variant="outline"
               onClick={async () => {
-                const url = `${API_BASE_URL}/uploads/${encodeURIComponent(
+                const url = `${UPLOAD_BASE_URL}/uploads/${encodeURIComponent(
                   album.name
                 )}/${encodeURIComponent(images[currentSlide].file_name)}`;
 
@@ -434,7 +435,7 @@ const AlbumPage = () => {
               }`}
             >
               <Image
-                src={`${API_BASE_URL}/uploads/${encodeURIComponent(
+                src={`${UPLOAD_BASE_URL}/uploads/${encodeURIComponent(
                   album.name
                 )}/${encodeURIComponent(image.file_name)}`}
                 alt={`Slide ${index + 1}`}
@@ -538,7 +539,7 @@ const AlbumPage = () => {
               <Card key={image.id} onClick={() => handleImageClick(index)}>
                 <div className="relative aspect-[4/3] cursor-pointer">
                   <Image
-                    src={`${API_BASE_URL}/uploads/${encodeURIComponent(
+                    src={`${UPLOAD_BASE_URL}/uploads/${encodeURIComponent(
                       album.name
                     )}/${encodeURIComponent(image.file_name)}`}
                     alt={`Image ${image.id}`}

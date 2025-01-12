@@ -35,6 +35,7 @@ interface AlbumImage {
 }
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+const UPLOAD_BASE_URL = process.env.NEXT_PUBLIC_UPLOAD_URL;
 
 const HomePage = () => {
   const [albums, setAlbums] = useState<Album[]>([]);
@@ -80,7 +81,7 @@ const HomePage = () => {
 
             const firstImage = imagesData.images[0]?.file_name;
             const thumbnail = firstImage
-              ? `${API_BASE_URL}/uploads/${encodeURIComponent(
+              ? `${UPLOAD_BASE_URL}/uploads/${encodeURIComponent(
                   album.name
                 )}/${encodeURIComponent(firstImage)}`
               : "https://via.placeholder.com/300x200";
