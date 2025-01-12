@@ -511,8 +511,8 @@ const AlbumPage = () => {
               ← Back to Home
             </Button>
             <div className="text-center">
-              <h1 className="text-3xl font-bold">{album.name}</h1>
-              <p className="text-sm text-gray-500 mt-1 italic">{album.date}</p>
+              <h1 className="font-serif italic text-3xl font-bold">{album.name}</h1>
+              <p className="text-sm text-gray-500 mt-1">{album.date}</p>
             </div>
             <Button
               variant="outline"

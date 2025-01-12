@@ -140,13 +140,16 @@ const HomePage = () => {
   return (
     <div className="container mx-auto p-6">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">Photo Albums</h1>
+        <h1 className="text-4xl font-medium lg:text-4xl font-[Playfair Display]">
+          <span className="font-serif italic">Dylan&apos;s Photo Albums</span>
+        </h1>
         <div className="flex space-x-4">
           <Link href="/admin" className="text-sm text-gray-500 hover:underline">
             Admin Panel
           </Link>
         </div>
       </div>
+
       {/* Search and Sorting Controls */}
       <div className="flex justify-between items-center mb-4">
         {/* Search Bar */}
@@ -155,22 +158,31 @@ const HomePage = () => {
           placeholder="Search albums..."
           value={searchQuery}
           onChange={handleSearch}
-          className="w-full max-w-xs"
+          className="w-full max-w-xs bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-0"
         />
 
         {/* Sorting Dropdown */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="w-[180px] justify-between">
+            <Button
+              variant="outline"
+              className="w-[180px] justify-between bg-gray-800 text-white"
+            >
               {sortKey === "date" ? "Sort by Date" : "Sort by Name"}
               <ArrowUpDown className="ml-2 h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-[180px]">
-            <DropdownMenuItem onClick={() => handleSort("date")}>
+          <DropdownMenuContent className="w-[180px] bg-gray-800 text-white border-none">
+            <DropdownMenuItem
+              onClick={() => handleSort("date")}
+              className="hover:bg-gray-700"
+            >
               Sort by Date
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleSort("name")}>
+            <DropdownMenuItem
+              onClick={() => handleSort("name")}
+              className="hover:bg-gray-700"
+            >
               Sort by Name
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -193,33 +205,40 @@ const HomePage = () => {
                   loading="lazy"
                   sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                 />
-                {/* Badge displaying number of images */}
+
+                {/* Image count badge (top-right) */}
                 <Badge
-                  variant="outline"
+                  variant="secondary"
                   className="absolute top-2 right-2 bg-black/50 text-white"
                 >
                   {album.number_of_images}{" "}
                   {album.number_of_images === 1 ? "image" : "images"}
                 </Badge>
-                {/* Stacked badges for camera model, lens model, and aperture */}
-                <div className="absolute top-2 right-2 flex flex-col items-end space-y-1">
-                  <Badge variant="outline" className="bg-black/50 text-white">
-                    {album.number_of_images}{" "}
-                    {album.number_of_images === 1 ? "image" : "images"}
-                  </Badge>
+
+                {/* Stacked metadata badges positioned just above the bottom section */}
+                <div className="absolute bottom-0 right-2 mb-[6rem] flex flex-col items-end space-y-1">
+                  {album.aperture && (
+                    <Badge
+                      variant="secondary"
+                      className="bg-black/20 text-gray-300"
+                    >
+                      {album.aperture}
+                    </Badge>
+                  )}
                   {album.camera_model && (
-                    <Badge variant="outline" className="bg-black/50 text-white">
+                    <Badge
+                      variant="secondary"
+                      className="bg-black/20 text-gray-300"
+                    >
                       {album.camera_model}
                     </Badge>
                   )}
                   {album.lens_model && (
-                    <Badge variant="outline" className="bg-black/50 text-white">
+                    <Badge
+                      variant="secondary"
+                      className="bg-black/20 text-gray-300"
+                    >
                       {album.lens_model}
-                    </Badge>
-                  )}
-                  {album.aperture && (
-                    <Badge variant="outline" className="bg-black/50 text-white">
-                      {album.aperture}
                     </Badge>
                   )}
                 </div>
