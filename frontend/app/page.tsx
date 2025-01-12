@@ -37,7 +37,6 @@ interface AlbumImage {
 const HomePage = () => {
   const [albums, setAlbums] = useState<Album[]>([]);
   const [filteredAlbums, setFilteredAlbums] = useState<Album[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<"date" | "name">("date"); // Default sort by date
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -104,8 +103,6 @@ const HomePage = () => {
           console.error("Unexpected error fetching albums");
           setError("Unexpected error");
         }
-      } finally {
-        setLoading(false);
       }
     };
 
@@ -135,10 +132,6 @@ const HomePage = () => {
     );
     setFilteredAlbums(filtered);
   };
-
-  if (loading) {
-    return <p className="text-center">Loading albums...</p>;
-  }
 
   if (error) {
     return <p className="text-center text-red-500">Error: {error}</p>;

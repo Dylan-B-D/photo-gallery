@@ -52,7 +52,6 @@ const AlbumPage = () => {
 
   const [album, setAlbum] = useState<Album | null>(null);
   const [images, setImages] = useState<AlbumImage[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSlideshowActive, setIsSlideshowActive] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -89,8 +88,6 @@ const AlbumPage = () => {
         } else {
           setError("An unknown error occurred");
         }
-      } finally {
-        setLoading(false);
       }
     };
 
@@ -211,10 +208,6 @@ const AlbumPage = () => {
     setCurrentSlide(index);
     setIsViewingMode(true);
   };
-
-  if (loading) {
-    return <p className="text-center">Loading images...</p>;
-  }
 
   if (error) {
     return <p className="text-center text-red-500">Error: {error}</p>;

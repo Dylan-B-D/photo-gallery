@@ -4,9 +4,6 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function middleware(request: NextRequest): Promise<NextResponse> {
     console.log("Middleware: Protecting admin routes");
 
-    // Log the cookies directly from request.cookies
-    console.log("Middleware: Cookies:", request.cookies);
-
     // Protect admin routes
     if (request.nextUrl.pathname.startsWith('/admin')) {
         const isAuth: boolean = await isAuthenticated(request);
