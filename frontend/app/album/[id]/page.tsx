@@ -102,23 +102,22 @@ const AlbumPage = () => {
   }, [id]);
 
   useEffect(() => {
-    if (isSlideshowActive) {
+    if (isViewingMode || isSlideshowActive) {
       // Preload the next and previous images
       const nextImageIndex = (currentSlide + 1) % images.length;
       const prevImageIndex = (currentSlide - 1 + images.length) % images.length;
-  
+
       const preloadImage = (imageIndex: number) => {
         const img = document.createElement("img");
         img.src = `${UPLOAD_BASE_URL}/uploads/${encodeURIComponent(
           album?.name || ""
         )}/${encodeURIComponent(images[imageIndex].file_name)}`;
-      };      
-  
+      };
+
       preloadImage(nextImageIndex);
       preloadImage(prevImageIndex);
     }
-  }, [currentSlide, isSlideshowActive, images, album?.name]);
-  
+  }, [currentSlide, isViewingMode, isSlideshowActive, images, album?.name]);
 
   // Slideshow logic
   useEffect(() => {
@@ -216,6 +215,17 @@ const AlbumPage = () => {
     }
   };
 
+  const handleStartSlideshow = () => {
+    // Preload the first image
+    const firstImage = new window.Image();
+    firstImage.src = `${UPLOAD_BASE_URL}/uploads/${encodeURIComponent(
+      album?.name || ""
+    )}/${encodeURIComponent(images[0].file_name)}`;
+
+    setCurrentSlide(0); // Start at the first slide
+    setIsSlideshowActive(true);
+  };
+
   useEffect(() => {
     if (showInfo && images[currentSlide]) {
       fetchImageMetadata(images[currentSlide].id);
@@ -287,7 +297,7 @@ const AlbumPage = () => {
           )}
 
           {/* Image */}
-          <div className="relative w-full h-full">
+          <div className="relative w-full h-full z-10">
             <Image
               src={`${UPLOAD_BASE_URL}/uploads/${encodeURIComponent(
                 album.name
@@ -316,7 +326,7 @@ const AlbumPage = () => {
           )}
 
           {/* Download and Info Buttons */}
-          <div className="absolute bottom-4 right-4 flex items-center space-x-4 z-20">
+          <div className="absolute bottom-4 right-4 flex items-center space-x-4 z-50">
             <Button
               variant="outline"
               onClick={async () => {
@@ -361,7 +371,7 @@ const AlbumPage = () => {
 
           {/* Info Panel */}
           {showInfo && (
-            <div className="absolute bottom-16 right-4 bg-gray-800 bg-opacity-90 p-6 rounded-lg text-white w-80 shadow-lg z-30">
+            <div className="absolute bottom-16 right-4 bg-gray-800 bg-opacity-90 p-6 rounded-lg text-white w-80 shadow-lg z-50">
               {isMetadataLoading ? (
                 <div className="flex items-center justify-center">
                   <Loader2 className="animate-spin" />
@@ -547,14 +557,15 @@ const AlbumPage = () => {
               ← Back to Home
             </Button>
             <div className="text-center">
-              <h1 className="font-serif italic text-3xl font-bold">{album.name}</h1>
+              <h1 className="font-serif italic text-3xl font-bold">
+                {album.name}
+              </h1>
               <p className="text-sm text-gray-500 mt-1">{album.date}</p>
             </div>
             <Button
               variant="outline"
               onClick={() => {
-                setCurrentSlide(0); 
-                setIsSlideshowActive(true);
+                handleStartSlideshow();
                 toggleFullscreen();
               }}
               className="text-sm"
