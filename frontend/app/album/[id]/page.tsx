@@ -101,6 +101,25 @@ const AlbumPage = () => {
     fetchAlbumAndImages();
   }, [id]);
 
+  useEffect(() => {
+    if (isSlideshowActive) {
+      // Preload the next and previous images
+      const nextImageIndex = (currentSlide + 1) % images.length;
+      const prevImageIndex = (currentSlide - 1 + images.length) % images.length;
+  
+      const preloadImage = (imageIndex: number) => {
+        const img = document.createElement("img");
+        img.src = `${UPLOAD_BASE_URL}/uploads/${encodeURIComponent(
+          album?.name || ""
+        )}/${encodeURIComponent(images[imageIndex].file_name)}`;
+      };      
+  
+      preloadImage(nextImageIndex);
+      preloadImage(prevImageIndex);
+    }
+  }, [currentSlide, isSlideshowActive, images, album?.name]);
+  
+
   // Slideshow logic
   useEffect(() => {
     let slideshowInterval: NodeJS.Timeout | null = null;

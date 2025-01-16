@@ -140,7 +140,7 @@ async fn process_field_stream(
 
         // Add periodic progress logging
         if chunk_count % 5 == 0 {
-            info!(
+            debug!(
                 "Upload progress: {} chunks, {} bytes processed",
                 chunk_count, total_bytes
             );
@@ -178,7 +178,6 @@ pub async fn create_album_handler(
         headers.get("transfer-encoding")
     );
 
-    // Rest of the handler implementation remains the same...
     if let Err((status, body)) = verify_admin_request(&headers) {
         return (status, body).into_response();
     }
