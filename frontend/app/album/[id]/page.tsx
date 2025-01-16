@@ -71,11 +71,13 @@ const AlbumPage = () => {
   const [metadataError, setMetadataError] = useState<string | null>(null); // Metadata error state
 
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (!id) return;
 
     const fetchAlbumAndImages = async () => {
+      setIsLoading(true);
       try {
         const response = await fetch(`${API_BASE_URL}/api/albums/${id}`);
         if (!response.ok) throw new Error("Failed to fetch album images");
@@ -91,6 +93,8 @@ const AlbumPage = () => {
         } else {
           setError("An unknown error occurred");
         }
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -216,6 +220,14 @@ const AlbumPage = () => {
     return <p className="text-center text-red-500">Error: {error}</p>;
   }
 
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <p className="text-center">Loading...</p>
+      </div>
+    );
+  }
+
   if (!album) {
     return <p className="text-center text-red-500">Album not found.</p>;
   }
@@ -263,6 +275,7 @@ const AlbumPage = () => {
               )}/${encodeURIComponent(images[currentSlide].file_name)}`}
               alt={`Image ${currentSlide + 1}`}
               fill
+              loading="lazy"
               style={{ objectFit: "contain" }}
               className="z-10"
             />
@@ -440,6 +453,7 @@ const AlbumPage = () => {
                 )}/${encodeURIComponent(image.file_name)}`}
                 alt={`Slide ${index + 1}`}
                 fill
+                loading="lazy"
                 style={{ objectFit: "contain" }}
               />
             </div>
