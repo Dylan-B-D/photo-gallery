@@ -361,7 +361,7 @@ const AlbumPage = () => {
 
           {/* Info Panel */}
           {showInfo && (
-            <div className="absolute bottom-16 right-4 bg-gray-800 bg-opacity-90 p-6 rounded-lg text-white w-80 shadow-lg">
+            <div className="absolute bottom-16 right-4 bg-gray-800 bg-opacity-90 p-6 rounded-lg text-white w-80 shadow-lg z-30">
               {isMetadataLoading ? (
                 <div className="flex items-center justify-center">
                   <Loader2 className="animate-spin" />
