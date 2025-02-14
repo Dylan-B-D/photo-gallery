@@ -1,43 +1,63 @@
-{% extends "base.html" %}
+{% extends "base.html" %} 
+
+{% block body_class %}album-page{% endblock %}
 
 {% block title %}{{ album.name }} - Dylan's Photo Gallery{% endblock %}
-
-{% block nav_title %}
-<a href="/" class="hover:opacity-75">Dylan's <span class="text-emerald-400">Photo</span> Gallery</a>
-{% endblock %}
 
 {% block content %}
 <div class="px-4 py-6 sm:px-0">
     <!-- Album Header -->
     <div class="mb-8">
-        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
-            <div>
-                <h1 class="text-3xl font-bold text-white mb-2">{{ album.name }}</h1>
+        <!-- Grid Layout for Header -->
+        <div class="grid grid-cols-3 items-center">
+            <!-- Back Button (Left) -->
+            <div class="flex justify-start">
+                <a href="/" class="text-gray-400 hover:text-white flex items-center gap-2">
+                    <i class="fas fa-arrow-left"></i>
+                    <span>Home</span>
+                </a>
+            </div>
+
+            <!-- Album Name and Description (Center) -->
+            <div class="flex flex-col items-center text-center">
+                <h1 class="text-3xl font-bold text-white mb-1">{{ album.name }}</h1>
                 {% if album.description %}
                 <p class="text-gray-400">{{ album.description }}</p>
                 {% endif %}
             </div>
-            <div class="mt-4 md:mt-0 flex flex-wrap gap-3">
-                {% if album.camera_model %}
-                <span class="bg-gray-800 px-3 py-1 rounded-full text-sm">
-                    <i class="fas fa-camera mr-2"></i>{{ album.camera_model }}
-                </span>
-                {% endif %}
-                
-                {% if album.lens_model %}
-                <span class="bg-gray-800 px-3 py-1 rounded-full text-sm">
-                    <i class="fas fa-circle mr-2"></i>{{ album.lens_model }}
-                </span>
-                {% endif %}
-                
-                {% if album.aperture %}
-                <span class="bg-gray-800 px-3 py-1 rounded-full text-sm">
-                    <i class="fas fa-dot-circle mr-2"></i>ƒ/{{ album.aperture }}
-                </span>
-                {% endif %}
+
+            <!-- Slideshow Button (Right) -->
+            <div class="flex justify-end">
+                <button class="bg-gray-800 bg-opacity-20 backdrop-blur-xs px-3 py-1 rounded-full text-sm text-white hover:bg-opacity-30 flex items-center gap-2">
+                    <span>Slideshow</span>
+                    <i class="fas fa-play"></i>
+                </button>
             </div>
         </div>
-        <div class="flex gap-4 text-sm text-gray-400">
+
+        <!-- Badges (Camera, Lens, Aperture) -->
+        <div class="mt-4 flex flex-wrap gap-3 justify-center">
+            {% if album.camera_model %}
+            <span class="bg-gray-800 bg-opacity-20 backdrop-blur-xs px-3 py-1 rounded-full text-sm">
+                <i class="fas fa-camera mr-2"></i>{{ album.camera_model }}
+            </span>
+            {% endif %}
+            
+            {% if album.lens_model %}
+            <span class="bg-gray-800 bg-opacity-20 backdrop-blur-xs px-3 py-1 rounded-full text-sm">
+                <i class="fas fa-circle mr-2"></i>{{ album.lens_model }}
+            </span>
+            {% endif %}
+            
+            {% if album.aperture %}
+            <span class="bg-gray-800 bg-opacity-20 backdrop-blur-xs px-3 py-1 rounded-full text-sm">
+                <i class="fas fa-dot-circle mr-2"></i>ƒ/{{ album.aperture }}
+            </span>
+            {% endif %}
+        </div>
+
+        <!-- Date and Image Count -->
+        <div class="flex justify-center gap-4 text-sm text-gray-400 mt-4">
             <span><i class="fas fa-calendar mr-2"></i>{{ album.date }}</span>
             <span><i class="fas fa-images mr-2"></i>{{ album.num_images }} photos</span>
         </div>
@@ -51,9 +71,14 @@
         <div class="relative aspect-square group cursor-pointer hover:opacity-90 transition-opacity"
              @click="selectedImage = $el.getAttribute('data-image')"
              data-image="{{ image.filename }}">
+            <!-- Skeleton Loader -->
+            <div class="w-full h-full bg-gray-800 animate-pulse absolute inset-0 rounded-lg"></div>
+            
             <img src="/uploads/{{ album.id }}/thumbnail/{{ image.filename }}"
                  alt="Photo"
-                 class="w-full h-full object-cover rounded-lg">
+                 class="w-full h-full object-cover rounded-lg" 
+                 loading="lazy"
+                 onload="this.previousElementSibling.remove()">
             
             <!-- Hover Overlay -->
             <div class="absolute inset-0 bg-black bg-opacity-30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg">
@@ -72,13 +97,12 @@
                     <img :src="'/uploads/{{ album.id }}/optimized/' + selectedImage"
                          class="max-h-[90vh] max-w-full object-contain"
                          @click.stop>
-                    
-                    <!-- Close Button -->
-                    <button class="absolute top-4 right-4 text-white hover:text-gray-300"
-                            @click="selectedImage = null">
-                        <i class="fas fa-times text-2xl"></i>
-                    </button>
                 </div>
+                <!-- Close Button -->
+                <button class="absolute top-4 right-4 text-white hover:text-gray-300"
+                        @click="selectedImage = null">
+                    <i class="fas fa-times text-2xl"></i>
+                </button>
             </div>
         </template>
     </div>

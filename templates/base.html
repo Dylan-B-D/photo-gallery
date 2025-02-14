@@ -88,10 +88,14 @@
       .custom-scrollbar::-webkit-scrollbar-thumb:hover {
         background: #6b7280; /* Gray-500 */
       }
+
+      .album-page nav .flex {
+        height: auto; /* Override h-16 for album page */
+      }
     </style>
     {% block head %}{% endblock %}
   </head>
-  <body class="bg-background min-h-screen text-gray-100 font-sans">
+  <body class="bg-background min-h-screen text-gray-100 font-sans {% block body_class %}{% endblock %}">
     <nav>
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex justify-between h-16">
@@ -109,7 +113,7 @@
       </div>
     </nav>
 
-    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+    <main class="max-w-7xl mx-auto sm:px-6 lg:px-8">
       {% block content %}{% endblock %}
     </main>
 
