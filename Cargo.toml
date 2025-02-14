@@ -1,0 +1,39 @@
+[package]
+name = "photo-gallery"
+version = "0.1.0"
+edition = "2021"
+default-run = "photo-gallery"
+
+[dependencies]
+minijinja = { version = "2.7.0", features = ["loader"] }
+minijinja-autoreload = "2.7.0"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+axum = { version = "0.8.1", features = ["macros", "multipart"] }
+dotenv = "0.15"
+serde = { version = "1.0", features = ["derive"] }
+argon2 = "0.5"
+jsonwebtoken = "9.3.1"
+tower-cookies = "0.11.0"
+tower-http = { version = "0.6.2", features = ["fs", "limit"] }
+tower_governor = "0.6.0"
+sqlx = { version = "0.8.3", features = [
+    "sqlite",
+    "runtime-tokio-native-tls",
+    "migrate",
+] }
+rexif = "0.7.5"
+uuid = { version = "1.13.1", features = ["v4"] }
+serde_json = "1.0.138"
+tracing = "0.1.41"
+tracing-subscriber = "0.3"
+image = "0.25.5"
+futures = "0.3.31"
+fast_image_resize = "5.1.1"
+turbojpeg = { version = "1.2.1", features = ["image"] }
+
+[[bin]]
+name = "generate_password"
+path = "src/bin/generate_password.rs"
+
+[profile.dev]
+# opt-level = 1

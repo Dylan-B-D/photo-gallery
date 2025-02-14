@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block title %}Dylan's Photo Gallery - Home{% endblock %}
+
+{% block nav_title %}Dylan's <span class="text-emerald-400">Photo</span> Gallery{% endblock %}
+
+{% block nav_items %}
+<a href="/login" class="text-gray-500 hover:text-gray-300 px-3 rounded-md text-sm font-medium">
+    <i class="fas fa-sign-in-alt"></i> Admin Panel
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="px-4 sm:px-0" 
+    x-data="{ 
+        search: '', 
+        sort: 'date-desc', 
+        albums: JSON.parse($el.dataset.albums), 
+        get filteredAlbums() {
+            return this.albums
+                .filter(album => {
+                    let query = this.search.toLowerCase();
+                    return album[0].name.toLowerCase().includes(query) || 
+                        (album[0].description && album[0].description.toLowerCase().includes(query)) || 
+                        (album[0].camera_model && album[0].camera_model.toLowerCase().includes(query)) || 
+                        (album[0].lens_model && album[0].lens_model.toLowerCase().includes(query));
+                })
+                .sort((a, b) => {
+                    let aData = a[0], bData = b[0];
+                    switch (this.sort) {
+                        case 'date-desc': return new Date(bData.date) - new Date(aData.date);
+                        case 'date-asc': return new Date(aData.date) - new Date(bData.date);
+                        case 'name-asc': return aData.name.localeCompare(bData.name);
+                        case 'name-desc': return bData.name.localeCompare(aData.name);
+                        case 'num-images-desc': return bData.num_images - aData.num_images;
+                        case 'num-images-asc': return aData.num_images - bData.num_images;
+                        default: return 0;
+                    }
+                });
+        }
+    }"
+    data-albums='{{ albums | safe }}'
+>
+    <!-- Search & Filter -->
+    <div class="flex flex-col sm:flex-row justify-between items-center mb-6">
+        <!-- Search Bar -->
+        <div class="relative w-full sm:w-1/2">
+            <input 
+            type="text" 
+            placeholder="Search albums..." 
+            class="w-full p-2 pl-10 border border-gray-700 rounded-lg bg-gray-800 bg-opacity-20 backdrop-blur-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            x-model="search"
+        >
+            <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+        </div>
+
+        <!-- Sort/Filter Dropdown -->
+        <div class="relative w-full sm:w-auto mt-4 sm:mt-0 select-none" x-data="{ open: false, selected: 'date-desc', options: [
+        { value: 'date-desc', text: 'Newest First' },
+        { value: 'date-asc', text: 'Oldest First' },
+        { value: 'name-asc', text: 'A-Z' },
+        { value: 'name-desc', text: 'Z-A' },
+        { value: 'num-images-desc', text: 'Most Images' },
+        { value: 'num-images-asc', text: 'Fewest Images' }
+        ] }">
+        <div @click="open = !open" class="w-full sm:w-auto appearance-none p-2 pl-4 pr-10 border border-gray-700 rounded-lg bg-gray-800 bg-opacity-20 backdrop-blur-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-400 cursor-pointer relative">
+            <span x-text="options.find(option => option.value === selected).text"></span>
+            <i class="fas fa-chevron-down absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none"></i>
+        </div>
+        <div x-show="open" @click.away="open = false" class="absolute mt-1 w-full sm:w-auto bg-gray-800 bg-opacity-80 backdrop-blur-xs rounded-lg shadow-lg z-10">
+            <template x-for="option in options" :key="option.value">
+                <div @click="selected = option.value; open = false" class="p-2 pl-4 pr-10 text-white hover:bg-gray-700 cursor-pointer" :class="{ 'bg-gray-700': selected === option.value }" x-text="option.text"></div>
+            </template>
+        </div>
+        </div>
+    </div>
+
+    <!-- Albums Grid -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <template x-for="(album, index) in filteredAlbums" :key="index">
+            <a :href="'/albums/' + album[0].id" class="group block bg-gray-800 bg-opacity-10 rounded-lg overflow-hidden shadow-lg transition-all duration-300 hover:shadow-2xl hover:scale-105 relative">
+            <!-- Gradient Background -->
+            <div class="absolute inset-0 bg-gradient-to-r from-fuchsia-400 to-sky-400 opacity-20 blur-[100px]"></div>
+             <!-- Album Thumbnail -->
+                <div class="relative h-48 bg-gray-900">
+                    <template x-if="album[1]">
+                        <img 
+                            :src="'/uploads/' + album[0].id + '/thumbnail/' + album[1]"
+                            :alt="album[0].name"
+                            class="w-full h-full object-cover"
+                        >
+                    </template>
+                    <template x-if="!album[1]">
+                        <div class="w-full h-full flex items-center justify-center text-gray-500">
+                            <i class="fas fa-camera text-4xl"></i>
+                        </div>
+                    </template>
+                    <!-- Image count badge -->
+                    <div class="absolute top-2 right-2 bg-black bg-opacity-70 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded-full">
+                        <i class="fas fa-images mr-1"></i>
+                        <span x-text="album[0].num_images"></span>
+                    </div>
+                    <!-- Overlay on hover -->
+                    <div class="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                        <span class="text-white text-lg font-bold">View Album</span>
+                    </div>
+                </div>
+                
+                <!-- Album Info -->
+                <div class="p-4 bg-opacity-80 backdrop-blur-sm flex flex-col justify-between min-h-[150px]">
+                    <div>
+                        <div class="flex justify-between items-start mb-2">
+                            <h3 class="text-lg font-bold text-white" x-text="album[0].name"></h3>
+                            <span class="text-xs text-gray-400" x-text="album[0].date"></span>
+                        </div>
+                        
+                        <!-- Clamp the description to a max height -->
+                        <p class="text-gray-400 text-sm line-clamp-2 overflow-hidden" 
+                        x-text="album[0].description" x-show="album[0].description">
+                        </p>
+                    </div>
+
+                    <div class="flex flex-wrap gap-2 text-xs text-gray-300 mt-auto">
+                        <span x-show="album[0].camera_model" class="bg-gray-700 bg-opacity-50 px-2 py-1 rounded-full">
+                            <i class="fas fa-camera mr-1"></i>
+                            <span x-text="album[0].camera_model"></span>
+                        </span>
+                        
+                        <span x-show="album[0].lens_model" class="bg-gray-700 bg-opacity-50 px-2 py-1 rounded-full">
+                            <i class="fas fa-circle mr-1"></i>
+                            <span x-text="album[0].lens_model.length > 15 ? album[0].lens_model.substring(0, 15) + '...' : album[0].lens_model"></span>
+                        </span>
+                        
+                        <span x-show="album[0].aperture" class="bg-gray-700 bg-opacity-50 px-2 py-1 rounded-full">
+                            <i class="fas fa-dot-circle mr-1"></i>
+                            <span x-text="album[0].aperture"></span>
+                        </span>
+                    </div>
+                </div>
+            </a>
+        </template>
+    </div>
+</div>
+{% endblock %}

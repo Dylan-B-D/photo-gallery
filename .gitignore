@@ -1,0 +1,6 @@
+/target
+.env
+static/css/tailwind.css
+node_modules/
+*.db
+uploads/

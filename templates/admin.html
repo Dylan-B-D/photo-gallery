@@ -1,0 +1,385 @@
+{% extends "base.html" %} {% block title %}Admin Dashboard - Photo Gallery{%
+endblock %} {% block nav_title %}Admin Dashboard{% endblock %} {% block content
+%}
+<div x-data="{ showCreateAlbumForm: false }" class="h-full">
+  {# Navigation section with absolute positioning #}
+  <div class="absolute top-4 right-4 flex items-center">
+    <a
+      href="/"
+      class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium"
+    >
+      <i class="fas fa-arrow-left"></i> Back
+    </a>
+    <button
+      @click="showCreateAlbumForm = true"
+      class="bg-green-500 bg-opacity-20 hover:bg-opacity-40 text-green-500 hover:text-white font-bold py-2 px-4 rounded ml-4 transition-colors duration-200"
+    >
+      <i class="fas fa-plus"></i> Create New Album
+    </button>
+    <a
+      href="/logout"
+      class="text-red-500 hover:text-white px-3 py-2 rounded-md text-sm font-medium ml-4"
+    >
+      <i class="fas fa-sign-out-alt"></i> Logout
+    </a>
+  </div>
+
+  {# Main content #}
+  <div class="px-4 py-6 sm:px-0">
+    <div class="bg-gray-800 shadow rounded-lg p-6">
+      <h2 class="text-2xl font-bold text-white mb-4">Dashboard</h2>
+
+      {# Modal template #}
+      <template x-if="showCreateAlbumForm">
+        <div
+          class="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center"
+        >
+          <div
+            class="bg-gray-800 w-full h-full p-8 relative flex flex-col justify-center"
+            x-data="{ 
+              albumName: '', 
+              description: '', 
+              date: new Date().toISOString().split('T')[0],
+              images: [],
+              loadingImages: false,
+              isSubmitting: false,
+              
+              createThumbnail(file) {
+                return new Promise((resolve) => {
+                  // Use createImageBitmap for faster processing
+                  const reader = new FileReader();
+                  reader.onload = async (e) => {
+                    try {
+                      // Create a bitmap first (this is faster than creating an Image)
+                      const bitmap = await createImageBitmap(file, {
+                        resizeWidth: 300,
+                        resizeHeight: 300,
+                        resizeQuality: 'medium'
+                      });
+                      
+                      // Use offscreen canvas when available for better performance
+                      const canvas = document.createElement('canvas');
+                      const ctx = canvas.getContext('2d');
+                      
+                      // Set dimensions maintaining aspect ratio
+                      const maxSize = 300;
+                      let width = bitmap.width;
+                      let height = bitmap.height;
+                      
+                      if (width > height) {
+                        if (width > maxSize) {
+                          height = Math.round(height * (maxSize / width));
+                          width = maxSize;
+                        }
+                      } else {
+                        if (height > maxSize) {
+                          width = Math.round(width * (maxSize / height));
+                          height = maxSize;
+                        }
+                      }
+                      
+                      canvas.width = width;
+                      canvas.height = height;
+                      
+                      // Draw and compress
+                      ctx.drawImage(bitmap, 0, 0, width, height);
+                      bitmap.close(); // Clean up the bitmap
+                      
+                      // Use lower quality for even faster processing
+                      const thumbnail = canvas.toDataURL('image/jpeg', 0.9);
+                      resolve(thumbnail);
+                    } catch (err) {
+                      // Fallback for browsers that don't support createImageBitmap
+                      const img = new Image();
+                      img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        
+                        const maxSize = 300;
+                        let width = img.width;
+                        let height = img.height;
+                        
+                        if (width > height) {
+                          if (width > maxSize) {
+                            height *= maxSize / width;
+                            width = maxSize;
+                          }
+                        } else {
+                          if (height > maxSize) {
+                            width *= maxSize / height;
+                            height = maxSize;
+                          }
+                        }
+                        
+                        canvas.width = width;
+                        canvas.height = height;
+                        ctx.drawImage(img, 0, 0, width, height);
+                        const thumbnail = canvas.toDataURL('image/jpeg', 0.6);
+                        resolve(thumbnail);
+                      };
+                      img.src = e.target.result;
+                    }
+                  };
+                  reader.readAsDataURL(file);
+                });
+              },
+              
+              async handleImageUpload(event) {
+                this.loadingImages = true;
+                const files = Array.from(event.target.files);
+                
+                // Process images in smaller batches for better UI responsiveness
+                const batchSize = 4;
+                const processedImages = [];
+                
+                for (let i = 0; i < files.length; i += batchSize) {
+                  const batch = files.slice(i, i + batchSize);
+                  const batchResults = await Promise.all(
+                    batch.map(async file => {
+                      const thumbnail = await this.createThumbnail(file);
+                      return {
+                        id: URL.createObjectURL(file),
+                        file,
+                        thumbnail,
+                        name: file.name,
+                        size: (file.size / (1024 * 1024)).toFixed(2)
+                      };
+                    })
+                  );
+                  processedImages.push(...batchResults);
+                  
+                  // Update the images array after each batch
+                  this.images = [...this.images, ...batchResults];
+                }
+                
+                this.loadingImages = false;
+              },
+              
+              removeImage(id) {
+                URL.revokeObjectURL(id);
+                this.images = this.images.filter(img => img.id !== id);
+              },
+              
+              removeAllImages() {
+                this.images.forEach(img => URL.revokeObjectURL(img.id));
+                this.images = [];
+              },
+              
+              handleSubmit() {
+                if (this.isSubmitting) return;  // Prevent duplicate submissions
+                this.isSubmitting = true;
+                const formData = new FormData();
+                
+                // Add album data
+                const albumData = {
+                    name: this.albumName,
+                    description: this.description,
+                    date: this.date
+                };
+                
+                console.log('Album data being sent:', albumData);
+                
+                // Create a Blob from the JSON data
+                const albumBlob = new Blob([JSON.stringify(albumData)], {
+                    type: 'application/json'
+                });
+                formData.append('album', albumBlob);
+                
+                // Debug: Log the number of images before sending
+                console.log('Number of images to upload:', this.images.length);
+                
+                // Add all images
+                this.images.forEach((img, index) => {
+                    console.log(`Adding image ${index}:`, img.name, img.file);
+                    formData.append('images', img.file, img.name);
+                });
+                
+                // Debug: Log all FormData entries
+                for (const pair of formData.entries()) {
+                    console.log('FormData entry:', pair[0], pair[1]);
+                }
+                
+                // Submit the form with appropriate headers
+                fetch('/api/albums', {
+                    method: 'POST',
+                    body: formData,
+                })
+                .then(async response => {
+                    const text = await response.text();
+                    console.log('Raw response:', text);
+                    
+                    try {
+                        const data = JSON.parse(text);
+                        if (!response.ok) {
+                            throw new Error(data.message || 'Failed to create album');
+                        }
+                        return data;
+                    } catch (e) {
+                        console.error('Failed to parse response:', e);
+                        throw new Error('Invalid server response');
+                    }
+                })
+                .then(data => {
+                    console.log('Success response:', data);
+                    if (data.status === 'success') {
+                        // Clear form and close modal
+                        this.albumName = '';
+                        this.description = '';
+                        this.date = new Date().toISOString().split('T')[0];
+                        this.removeAllImages();
+                        this.showCreateAlbumForm = false;
+                        
+                        // Show success message with additional details
+                        alert(`
+                          Album created successfully!
+
+                          Album ID: ${data.album_id}
+                          Images Processed: ${data.images_processed}
+                          Total Time: ${data.timings.total}`);
+
+                    } else {
+                        throw new Error(data.message || 'Failed to create album');
+                    }
+                })
+
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert(error.message || 'Failed to create album');
+                })
+                .finally(() => {
+                    this.isSubmitting = false;
+                });
+            }
+            }"
+          >
+            <!-- Close button -->
+            <button
+              @click="showCreateAlbumForm = false"
+              class="absolute top-4 right-4 text-gray-400 hover:text-white"
+            >
+              <i class="fas fa-times"></i>
+            </button>
+
+            <!-- Clear all images button -->
+            <button
+              @click="removeAllImages"
+              class="absolute top-4 right-16 text-red-500 hover:text-red-700"
+              x-show="images.length > 0"
+            >
+              <i class="fas fa-trash"></i> Clear All
+            </button>
+
+            <h3 class="text-2xl font-bold text-white mb-6">Create New Album</h3>
+
+            <form
+              @submit.prevent="handleSubmit"
+              class="space-y-6"
+              enctype="multipart/form-data"
+            >
+              <div class="flex gap-4">
+                <div class="w-2/3">
+                  <label class="block text-sm font-medium text-gray-300"
+                    >Album Name</label
+                  >
+                  <input
+                    type="text"
+                    x-model="albumName"
+                    class="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-white"
+                    required
+                  />
+                </div>
+                <div class="w-1/3">
+                  <label class="block text-sm font-medium text-gray-300"
+                    >Date</label
+                  >
+                  <input
+                    type="date"
+                    x-model="date"
+                    class="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-white"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-300">
+                  Description
+                </label>
+                <textarea
+                  x-model="description"
+                  class="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-white"
+                  rows="3"
+                ></textarea>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-300">
+                  Image(s) <span x-text="images.length"></span>
+                </label>
+                <input
+                  type="file"
+                  @change="handleImageUpload"
+                  multiple
+                  accept="image/*"
+                  class="mt-1 block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-500 file:bg-opacity-20 hover:file:bg-opacity-40 file:text-blue-500 hover:file:text-white transition-colors duration-200"
+                />
+              </div>
+
+              <div
+                class="max-h-[52vh] overflow-y-auto border border-gray-700 rounded-lg p-4"
+              >
+                <div
+                  class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
+                >
+                  <!-- Loading skeletons -->
+                  <template x-if="loadingImages">
+                    <template x-for="i in 4" :key="i">
+                      <div class="animate-pulse">
+                        <div class="bg-gray-700 h-32 rounded-lg"></div>
+                        <div class="h-4 bg-gray-700 rounded mt-2 w-3/4"></div>
+                      </div>
+                    </template>
+                  </template>
+
+                  <!-- Image previews -->
+                  <template x-for="img in images" :key="img.id">
+                    <div class="relative group">
+                      <img
+                        :src="img.thumbnail"
+                        :alt="img.name"
+                        class="w-full h-32 object-cover rounded-lg"
+                        loading="lazy"
+                      />
+                      <button
+                        @click="removeImage(img.id)"
+                        type="button"
+                        class="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <i class="fas fa-times"></i>
+                      </button>
+                      <div class="text-xs text-gray-400 mt-1">
+                        <span x-text="`${img.name.slice(0, 20)}...`"></span>
+                        (<span x-text="img.size"></span> MB)
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                class="w-full bg-blue-500 bg-opacity-20 hover:bg-opacity-40 text-blue-500 hover:text-white rounded-lg py-2 px-4 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                :disabled="isSubmitting"
+              >
+                <span x-show="!isSubmitting">Create Album</span>
+                <span x-show="isSubmitting">Creating...</span>
+              </button>
+            </form>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,118 @@
+<!-- base.html -->
+<!DOCTYPE html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}Photo Gallery{% endblock %}</title>
+    <!-- Google Fonts -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;700&family=Fira+Code:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" type="image/png" href="/static/favicon.png" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+    />
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"
+    ></script>
+    {% if app_env == "development" %}
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              primary: "#18181b",
+              secondary: "#27272a",
+              accent: "#3f3f46",
+              background: "#09090b",
+            },
+            fontFamily: {
+              sans: ["Fira Code", "monospace"],
+              cinzel: ["Cinzel", "serif"],
+            },
+            backdropBlur: {
+              xs: '2px',
+            },
+          },
+        },
+      };
+    </script>
+    {% else %}
+    <link rel="stylesheet" href="/static/css/tailwind.css" />
+    {% endif %}
+    <style>
+      body {
+        background-color: #0f172a; /* slate-950 */
+        position: relative;
+        height: 100%;
+        width: 100%;
+      }
+
+      body::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(to right, #4f4f4f2e 1px, transparent 1px),
+          linear-gradient(to bottom, #4f4f4f2e 1px, transparent 1px);
+        background-size: 28px 48px;
+        mask-image: radial-gradient(
+          ellipse 60% 50% at 50% 0%,
+          #000 70%,
+          transparent 100%
+        );
+        background-attachment: fixed;
+        z-index: -1;
+      }
+
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 8px;
+      }
+
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: #1f2937; /* Gray-800 */
+        border-radius: 8px;
+      }
+
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #4b5563; /* Gray-600 */
+        border-radius: 8px;
+      }
+
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: #6b7280; /* Gray-500 */
+      }
+    </style>
+    {% block head %}{% endblock %}
+  </head>
+  <body class="bg-background min-h-screen text-gray-100 font-sans">
+    <nav>
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between h-16">
+          <div class="flex-shrink-0 flex items-center">
+            <h1
+              class="text-3xl font-bold text-white tracking-wider font-cinzel"
+            >
+              {% block nav_title %}{% endblock %}
+            </h1>
+          </div>
+          <div class="flex items-center">
+            {% block nav_items %}{% endblock %}
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+      {% block content %}{% endblock %}
+    </main>
+
+    {% block scripts %}{% endblock %}
+  </body>
+</html>

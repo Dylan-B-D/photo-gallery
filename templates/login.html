@@ -1,0 +1,87 @@
+<!-- login.html -->
+{% extends "base.html" %} {% block title %}Admin Login - Photo Gallery{%
+endblock %} {% block nav_title %}Admin Login{% endblock %} {% block nav_items %}
+<a
+  href="/"
+  class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium"
+>
+  <i class="fas fa-arrow-left"></i> Back
+</a>
+{% endblock %} {% block content %}
+<div
+  class="min-h-[calc(100vh-8rem)] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8"
+>
+  <div class="max-w-md w-full space-y-8">
+    <div>
+      <h2 class="mt-6 text-center text-3xl font-extrabold text-white">
+        Admin Login
+      </h2>
+    </div>
+    {% if error %}
+    <div class="bg-red-500 text-white px-4 py-3 rounded relative" role="alert">
+      <span class="block sm:inline">{{ error }}</span>
+    </div>
+    {% endif %}
+    <form
+      class="mt-8 space-y-6"
+      action="/login"
+      method="POST"
+      onsubmit="toggleLoadingState(this)"
+    >
+      <div class="rounded-md shadow-sm -space-y-px">
+        <div>
+          <label for="username" class="sr-only">Username</label>
+          <input
+            id="username"
+            name="username"
+            type="text"
+            required
+            class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-700 placeholder-gray-400 text-white rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm bg-gray-800"
+            placeholder="Username"
+          />
+        </div>
+        <div>
+          <label for="password" class="sr-only">Password</label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            required
+            class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-700 placeholder-gray-400 text-white rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm bg-gray-800"
+            placeholder="Password"
+          />
+        </div>
+      </div>
+
+      <div>
+        <button
+          id="login-button"
+          type="submit"
+          class="group relative w-full flex justify-center items-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-indigo-500 bg-indigo-500 bg-opacity-20 hover:bg-opacity-40 hover:text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
+        >
+          <span id="button-text">Sign in</span>
+          <span
+            id="spinner"
+            class="hidden w-5 h-5 border-2 border-t-transparent border-indigo-500 rounded-full animate-spin ml-2"
+          ></span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  function toggleLoadingState(form) {
+    const button = document.getElementById("login-button");
+    const buttonText = document.getElementById("button-text");
+    const spinner = document.getElementById("spinner");
+
+    // Disable the button and show the spinner
+    button.setAttribute("disabled", "true");
+    buttonText.classList.add("hidden");
+    spinner.classList.remove("hidden");
+
+    // Allow the form to continue submitting
+  }
+</script>
+{% endblock %}

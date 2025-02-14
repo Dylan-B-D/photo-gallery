@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}{{ album.name }} - Dylan's Photo Gallery{% endblock %}
+
+{% block nav_title %}
+<a href="/" class="hover:opacity-75">Dylan's <span class="text-emerald-400">Photo</span> Gallery</a>
+{% endblock %}
+
+{% block content %}
+<div class="px-4 py-6 sm:px-0">
+    <!-- Album Header -->
+    <div class="mb-8">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
+            <div>
+                <h1 class="text-3xl font-bold text-white mb-2">{{ album.name }}</h1>
+                {% if album.description %}
+                <p class="text-gray-400">{{ album.description }}</p>
+                {% endif %}
+            </div>
+            <div class="mt-4 md:mt-0 flex flex-wrap gap-3">
+                {% if album.camera_model %}
+                <span class="bg-gray-800 px-3 py-1 rounded-full text-sm">
+                    <i class="fas fa-camera mr-2"></i>{{ album.camera_model }}
+                </span>
+                {% endif %}
+                
+                {% if album.lens_model %}
+                <span class="bg-gray-800 px-3 py-1 rounded-full text-sm">
+                    <i class="fas fa-circle mr-2"></i>{{ album.lens_model }}
+                </span>
+                {% endif %}
+                
+                {% if album.aperture %}
+                <span class="bg-gray-800 px-3 py-1 rounded-full text-sm">
+                    <i class="fas fa-dot-circle mr-2"></i>ƒ/{{ album.aperture }}
+                </span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="flex gap-4 text-sm text-gray-400">
+            <span><i class="fas fa-calendar mr-2"></i>{{ album.date }}</span>
+            <span><i class="fas fa-images mr-2"></i>{{ album.num_images }} photos</span>
+        </div>
+    </div>
+
+    <!-- Image Grid -->
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
+         x-data="{ selectedImage: null }"
+         @keydown.escape="selectedImage = null">
+        {% for image in images %}
+        <div class="relative aspect-square group cursor-pointer hover:opacity-90 transition-opacity"
+             @click="selectedImage = $el.getAttribute('data-image')"
+             data-image="{{ image.filename }}">
+            <img src="/uploads/{{ album.id }}/thumbnail/{{ image.filename }}"
+                 alt="Photo"
+                 class="w-full h-full object-cover rounded-lg">
+            
+            <!-- Hover Overlay -->
+            <div class="absolute inset-0 bg-black bg-opacity-30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg">
+                <div class="text-white text-sm">
+                    <i class="fas fa-expand"></i>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+
+        <!-- Lightbox -->
+        <template x-if="selectedImage">
+            <div class="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center"
+                 @click="selectedImage = null">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+                    <img :src="'/uploads/{{ album.id }}/optimized/' + selectedImage"
+                         class="max-h-[90vh] max-w-full object-contain"
+                         @click.stop>
+                    
+                    <!-- Close Button -->
+                    <button class="absolute top-4 right-4 text-white hover:text-gray-300"
+                            @click="selectedImage = null">
+                        <i class="fas fa-times text-2xl"></i>
+                    </button>
+                </div>
+            </div>
+        </template>
+    </div>
+</div>
+{% endblock %}
