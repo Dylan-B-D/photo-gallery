@@ -1,85 +1,131 @@
 # Photo Gallery
 
-This is a photo gallery project.
+This is a photo gallery application built with Axum, Minijinja, HTMX, and Tailwind CSS. It includes features like authentication, rate limiting, and auto-reloading for development.
 
-## Getting Started
+## Table of Contents
+1. [Setting Up Environment Variables](#setting-up-environment-variables)
+2. [Generating a Hashed Password](#generating-a-hashed-password)
+3. [Running the Application](#running-the-application)
+4. [Tailwind CSS Setup](#tailwind-css-setup)
+5. [Auto-Reloading in Development](#auto-reloading-in-development)
 
-### Prerequisites
+## Setting Up Environment Variables
 
-- Rust and Cargo installed
-- Node.js and Yarn installed
+Create a `.env` file in the root of your project with the following variables:
 
-### Setup
+```bash
+# Database URL (SQLite)
+DATABASE_URL=sqlite:photo_gallery.db
 
-1. Clone the repository:
+# JWT Secret (for authentication)
+JWT_SECRET=your_jwt_secret_here
 
-   ```sh
-   git clone https://github.com/Dylan-B-D/photo-gallery.git
-   cd photo-gallery
-   ```
+# Admin credentials
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=$argon2id$v=19$m=19456,t=2,p=1$salt$hash
 
-2. Set up the `.env` file:
+# Auto-reload mode for Minijinja (0 = off, 1 = normal, 2 = fast)
+AUTO_RELOAD_MODE=2
 
-   ```sh
-   cd backend
-   cp .env.example .env
-   ```
+# Application environment (development or production)
+APP_ENV=development
+```
 
-3. Configure the environment variables in the `.env` file, including the path to your SQLite database, your admin username and password, and your authetication secret.
+**Notes:**
+* Replace `your_jwt_secret_here` with a secure secret key for JWT encoding
+* Replace `$argon2id$v=19$m=19456,t=2,p=1$salt$hash` with a hashed password generated using the `generate_password.rs` binary
+* Set `APP_ENV` to `production` when deploying the application
 
-### Backend
+## Generating a Hashed Password
 
-1. Navigate to the backend directory:
+The `generate_password.rs` binary is used to generate a hashed password for the admin user:
 
-   ```sh
-   cd backend
-   ```
+1. **Run the Binary**:
+```bash
+cargo run --bin generate_password
+```
 
-2. Run the backend server:
-   ```sh
-   cargo run
-   ```
+2. **Enter a Password**:
+```
+Enter your password: mysecurepassword
+```
 
-### Frontend
+3. **Copy the Output**:
+```
+Hashed password: $argon2id$v=19$m=19456,t=2,p=1$salt$hash
+```
 
-1. Navigate to the frontend directory:
+4. **Update .env**: Replace the `ADMIN_PASSWORD` value in your `.env` file with the generated hash.
 
-   ```sh
-   cd frontend
-   ```
+## Running the Application
 
-2. Install dependencies:
+### Development Mode
 
-   ```sh
-   yarn install
-   ```
+1. Set `APP_ENV=development` in your `.env` file
+2. Start the application:
+```bash
+cargo run
+```
+3. The application will be available at `http://127.0.0.1:3000`
 
-3. Run the frontend server:
+### Production Mode
 
-   ```sh
-   yarn dev
-   ```
+1. Set `APP_ENV=production` in your `.env` file
+2. Build the application:
+```bash
+cargo build --release
+```
+3. Run the application:
+```bash
+./target/release/photo-gallery
+```
 
-4. Setup .env.local in frontend. Example:
+## Tailwind CSS Setup
 
-   ```
-   NEXT_PUBLIC_API_URL=http://localhost:8080
+Tailwind CSS is used for styling. In development, the Tailwind CDN is used for faster iteration. In production, you need to compile Tailwind CSS into a static file.
 
+1. **Install Tailwind CSS**:
+```bash
+npm install tailwindcss postcss autoprefixer
+```
 
-### Database
+2. **Generate Tailwind Config**:
+```bash
+npx tailwindcss init
+```
 
-1. Set the `DATABASE_URL` environment variable:
+3. **Create a Tailwind CSS Input File**:
+Create a `src/tailwind.css` file with the following content:
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+```
 
-    ```sh
-    $env:DATABASE_URL="sqlite://photogallery.db"
-    ```
+4. **Compile Tailwind CSS**:
+```bash
+npm run build
+```
 
-2. Create and migrate the SQLite database using `sqlx` CLI:
-    ```sh
-    sqlx database create
-    sqlx migrate run
-    ```
+5. **Serve the Compiled CSS**: Ensure the compiled CSS file (`static/css/tailwind.css`) is served by your application.
+
+## Auto-Reloading in Development
+
+The application uses Minijinja's auto-reloading feature in development mode. This is controlled by the `AUTO_RELOAD_MODE` environment variable:
+
+* `0`: Auto-reloading is disabled
+* `1`: Normal auto-reloading
+* `2`: Fast auto-reloading (watches template files for changes)
+
+**Notes:**
+* Auto-reloading only works in development mode (`APP_ENV=development`)
+* Set `AUTO_RELOAD_MODE=2` for the best development experience
+
+## Troubleshooting
+
+* **Tailwind CSS Not Working in Production**: Ensure you've compiled Tailwind CSS and set `APP_ENV=production`
+* **Auto-Reloading Not Working**: Ensure `AUTO_RELOAD_MODE` is set to `1` or `2` and `APP_ENV=development`
 
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the MIT License. See the LICENSE file for details.
