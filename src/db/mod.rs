@@ -202,7 +202,7 @@ pub async fn get_album_with_images(
         aperture: album_row.aperture,
     };
 
-    // Get all images for this album
+    // Get all images for this album, ordered by date_created (oldest first)
     let image_rows = sqlx::query!(
         r#"
         SELECT 
@@ -211,7 +211,7 @@ pub async fn get_album_with_images(
             light_source, date_created, file_size
         FROM images
         WHERE album_id = ?
-        ORDER BY id ASC
+        ORDER BY date_created ASC
         "#,
         album_id
     )
