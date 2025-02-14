@@ -2,5 +2,5 @@
 .env
 static/css/tailwind.css
 node_modules/
-*.db
+*.db*
 uploads/
