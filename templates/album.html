@@ -12,7 +12,7 @@
         <div class="grid grid-cols-3 items-center">
             <!-- Back Button (Left) -->
             <div class="flex justify-start">
-                <a href="/" class="text-gray-400 hover:text-white flex items-center gap-2">
+                <a href="/" class="text-gray-300 hover:text-white flex items-center gap-2">
                     <i class="fas fa-arrow-left"></i>
                     <span>Home</span>
                 </a>
@@ -20,7 +20,7 @@
 
             <!-- Album Name and Description (Center) -->
             <div class="flex flex-col items-center text-center">
-                <h1 class="text-3xl font-bold text-white mb-1">{{ album.name }}</h1>
+                <h1 class="text-3xl font-bold font-cinzel text-white mb-1">{{ album.name }}</h1>
                 {% if album.description %}
                 <p class="text-gray-400">{{ album.description }}</p>
                 {% endif %}
@@ -28,38 +28,38 @@
 
             <!-- Slideshow Button (Right) -->
             <div class="flex justify-end">
-                <button class="bg-gray-800 bg-opacity-20 backdrop-blur-xs px-3 py-1 rounded-full text-sm text-white hover:bg-opacity-30 flex items-center gap-2">
+                <button class="bg-gray-100 bg-opacity-10 backdrop-blur-xs px-3 py-1 rounded-full text-sm text-white hover:bg-opacity-30 flex items-center gap-2">
                     <span>Slideshow</span>
                     <i class="fas fa-play"></i>
                 </button>
             </div>
         </div>
 
+        <!-- Date and Image Count -->
+        <div class="flex justify-center gap-4 text-sm text-gray-400 mt-4">
+            <span><i class="fas fa-calendar mr-2"></i>{{ album.date }}</span>
+            <span><i class="fas fa-images mr-2"></i>{{ album.num_images }} photos</span>
+        </div>
+
         <!-- Badges (Camera, Lens, Aperture) -->
         <div class="mt-4 flex flex-wrap gap-3 justify-center">
             {% if album.camera_model %}
-            <span class="bg-gray-800 bg-opacity-20 backdrop-blur-xs px-3 py-1 rounded-full text-sm">
+            <span class="bg-gray-200 bg-opacity-10 backdrop-blur-xs px-3 py-1 rounded-full text-sm">
                 <i class="fas fa-camera mr-2"></i>{{ album.camera_model }}
             </span>
             {% endif %}
             
             {% if album.lens_model %}
-            <span class="bg-gray-800 bg-opacity-20 backdrop-blur-xs px-3 py-1 rounded-full text-sm">
+            <span class="bg-gray-200 bg-opacity-10 backdrop-blur-xs px-3 py-1 rounded-full text-sm">
                 <i class="fas fa-circle mr-2"></i>{{ album.lens_model }}
             </span>
             {% endif %}
             
             {% if album.aperture %}
-            <span class="bg-gray-800 bg-opacity-20 backdrop-blur-xs px-3 py-1 rounded-full text-sm">
+            <span class="bg-gray-200 bg-opacity-10 backdrop-blur-xs px-3 py-1 rounded-full text-sm">
                 <i class="fas fa-dot-circle mr-2"></i>ƒ/{{ album.aperture }}
             </span>
             {% endif %}
-        </div>
-
-        <!-- Date and Image Count -->
-        <div class="flex justify-center gap-4 text-sm text-gray-400 mt-4">
-            <span><i class="fas fa-calendar mr-2"></i>{{ album.date }}</span>
-            <span><i class="fas fa-images mr-2"></i>{{ album.num_images }} photos</span>
         </div>
     </div>
 
