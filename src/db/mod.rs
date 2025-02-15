@@ -283,3 +283,17 @@ pub async fn get_album_size(pool: &SqlitePool, album_id: i64) -> Result<i64, sql
 
     Ok(result.total_size.unwrap_or(0))
 }
+
+pub async fn delete_album(pool: &SqlitePool, album_id: i64) -> Result<(), sqlx::Error> {
+    // First delete associated images
+    sqlx::query!("DELETE FROM images WHERE album_id = ?", album_id)
+        .execute(pool)
+        .await?;
+        
+    // Then delete the album
+    sqlx::query!("DELETE FROM albums WHERE id = ?", album_id)
+        .execute(pool)
+        .await?;
+        
+    Ok(())
+}

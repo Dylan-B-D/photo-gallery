@@ -1,13 +1,13 @@
 // src/handlers/admin.rs
 
 use axum::{
-    extract::{Multipart, State},
+    extract::{Multipart, Path, State},
     http::StatusCode,
     response::{Html, IntoResponse, Redirect, Response},
     Json,
 };
 use minijinja::context;
-use serde_json::json;
+use serde_json::{json, Value};
 use std::{sync::Arc, time::Instant};
 use tower_cookies::Cookies;
 
@@ -22,7 +22,7 @@ use crate::{
     db::{self, create_album, create_image, update_album_metadata},
     types::{AppState, CreateAlbumRequest},
     utils::{
-        create_album_directory, extract_exif_metadata, generate_unique_filename, process_image, save_image, ImageQuality
+        create_album_directory, delete_album_directory, extract_exif_metadata, generate_unique_filename, process_image, save_image, ImageQuality
     },
 };
 
@@ -230,4 +230,30 @@ pub async fn create_album_handler(
         }
     }))
     .into_response()
+}
+
+pub async fn delete_album_handler(
+    Path(album_id): Path<i64>,
+    State(state): State<Arc<AppState>>,
+    cookies: Cookies,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    // Require authentication
+    if let Err(_) = require_auth(cookies, State(state.clone())).await {
+        return Err((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()));
+    }
+
+    // Delete from database
+    if let Err(e) = db::delete_album(&state.pool, album_id).await {
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+    }
+
+    // Delete files
+    if let Err(e) = delete_album_directory(album_id).await {
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+    }
+
+    Ok(Json(json!({
+        "status": "success",
+        "message": format!("Album {} deleted successfully", album_id)
+    })))
 }

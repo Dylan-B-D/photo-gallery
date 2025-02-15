@@ -174,3 +174,10 @@ fn calculate_dimensions(width: u32, height: u32, max_size: u32) -> (u32, u32) {
     }
 }
 
+pub async fn delete_album_directory(album_id: i64) -> io::Result<()> {
+    let path = PathBuf::from("uploads").join(album_id.to_string());
+    if path.exists() {
+        fs::remove_dir_all(path).await?;
+    }
+    Ok(())
+}
