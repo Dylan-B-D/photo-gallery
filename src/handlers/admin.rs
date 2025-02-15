@@ -19,7 +19,7 @@ pub struct ProcessedImage {
 
 use crate::{
     auth::middleware::require_auth,
-    db::{create_album, create_image, update_album_metadata},
+    db::{self, create_album, create_image, update_album_metadata},
     types::{AppState, CreateAlbumRequest},
     utils::{
         create_album_directory, extract_exif_metadata, generate_unique_filename, process_image, save_image, ImageQuality
@@ -32,12 +32,28 @@ pub async fn admin_handler(
 ) -> Result<Html<String>, Redirect> {
     require_auth(cookies, State(state.clone())).await?;
 
+    // Get site stats
+    let (album_count, image_count, total_storage) = db::get_site_stats(&state.pool)
+        .await
+        .unwrap_or((0, 0, 0));
+
+    // Get albums with oldest image and size
+    let albums = db::get_albums_with_oldest_image(&state.pool)
+        .await
+        .unwrap_or_default();
+
     let reloader_guard = state.reloader.lock().await;
     let env = reloader_guard.acquire_env().unwrap();
     let tmpl = env.get_template("admin.html").unwrap();
-    let rendered = tmpl.render(context! {}).unwrap();
+    let rendered = tmpl.render(context! {
+        album_count => album_count,
+        image_count => image_count,
+        total_storage => (total_storage as f64 / 1024.0 / 1024.0).round(), // Convert to MB
+        albums => albums
+    }).unwrap();
     Ok(Html(rendered))
 }
+
 
 pub async fn create_album_handler(
     State(state): State<Arc<AppState>>,

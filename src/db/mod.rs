@@ -115,7 +115,7 @@ pub async fn update_album_metadata(pool: &SqlitePool, album_id: i64) -> Result<(
 
 pub async fn get_albums_with_oldest_image(
     pool: &SqlitePool,
-) -> Result<Vec<(Album, Option<String>)>, sqlx::Error> {
+) -> Result<Vec<(Album, Option<String>, i64)>, sqlx::Error> {
     #[derive(sqlx::FromRow)]
     struct AlbumWithImage {
         id: i64,
@@ -155,24 +155,26 @@ pub async fn get_albums_with_oldest_image(
     .fetch_all(pool)
     .await?;
 
-    Ok(results
-        .into_iter()
-        .map(|r| {
-            (
-                Album {
-                    id: r.id,
-                    name: r.name,
-                    description: r.description,
-                    date: r.date,
-                    num_images: r.num_images.unwrap_or(0) as i32,
-                    camera_model: r.camera_model,
-                    lens_model: r.lens_model,
-                    aperture: r.aperture,
-                },
-                r.oldest_image,
-            )
-        })
-        .collect())
+    let mut albums_with_size = Vec::new();
+    for result in results {
+        let album_size = get_album_size(pool, result.id).await?;
+        albums_with_size.push((
+            Album {
+                id: result.id,
+                name: result.name,
+                description: result.description,
+                date: result.date,
+                num_images: result.num_images.unwrap_or(0) as i32,
+                camera_model: result.camera_model,
+                lens_model: result.lens_model,
+                aperture: result.aperture,
+            },
+            result.oldest_image,
+            album_size,
+        ));
+    }
+
+    Ok(albums_with_size)
 }
 
 pub async fn get_album_with_images(
@@ -238,4 +240,46 @@ pub async fn get_album_with_images(
         .collect();
 
     Ok((album, images))
+}
+
+pub async fn get_site_stats(pool: &SqlitePool) -> Result<(i64, i64, i64), sqlx::Error> {
+    #[derive(sqlx::FromRow)]
+    struct SiteStats {
+        album_count: Option<i64>,
+        image_count: Option<i64>,
+        total_storage: Option<i64>,
+    }
+
+    let stats = sqlx::query_as!(
+        SiteStats,
+        r#"
+        SELECT 
+            (SELECT COUNT(*) FROM albums) as album_count,
+            (SELECT SUM(num_images) FROM albums) as image_count,
+            (SELECT SUM(file_size) FROM images) as total_storage
+        "#,
+    )
+    .fetch_one(pool)
+    .await?;
+
+    Ok((
+        stats.album_count.unwrap_or(0),
+        stats.image_count.unwrap_or(0),
+        stats.total_storage.unwrap_or(0),
+    ))
+}
+
+pub async fn get_album_size(pool: &SqlitePool, album_id: i64) -> Result<i64, sqlx::Error> {
+    let result = sqlx::query!(
+        r#"
+        SELECT SUM(file_size) as total_size
+        FROM images
+        WHERE album_id = ?
+        "#,
+        album_id
+    )
+    .fetch_one(pool)
+    .await?;
+
+    Ok(result.total_size.unwrap_or(0))
 }
