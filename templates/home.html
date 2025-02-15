@@ -49,7 +49,7 @@
             <input 
                 type="text" 
                 placeholder="Search albums..." 
-                class="w-full p-2 pl-10 border border-gray-700 rounded-lg bg-gray-800 bg-opacity-20 backdrop-blur-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                class="drop-shadow-emerald w-full p-2 pl-10 border border-gray-700 rounded-lg bg-gray-800 bg-opacity-20 backdrop-blur-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
                 x-model="search"
             >
             <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
@@ -66,7 +66,7 @@
                 { value: 'num-images-asc', text: 'Fewest Images' }
              ] }"
         >
-            <div @click="open = !open" class="w-full sm:w-auto appearance-none p-2 pl-4 pr-10 border border-gray-700 rounded-lg bg-gray-800 bg-opacity-20 backdrop-blur-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-400 cursor-pointer relative">
+            <div @click="open = !open" class="drop-shadow-emerald w-full sm:w-auto appearance-none p-2 pl-4 pr-10 border border-gray-700 rounded-lg bg-gray-800 bg-opacity-20 backdrop-blur-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-400 cursor-pointer relative">
                 <span x-text="options.find(option => option.value === selected).text"></span>
                 <i class="fas fa-chevron-down absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none"></i>
             </div>
@@ -108,7 +108,7 @@
                     </template>
     
                     <!-- Image count badge -->
-                    <div class="absolute top-2 right-2 bg-black bg-opacity-70 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded-full">
+                    <div class="absolute top-2 right-2 bg-black bg-opacity-50 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded-full">
                         <i class="fas fa-images mr-1"></i>
                         <span x-text="album[0].num_images"></span>
                     </div>
@@ -123,7 +123,7 @@
                 <div class="p-4 bg-opacity-80 backdrop-blur-sm flex flex-col justify-between min-h-[150px]">
                     <div>
                         <div class="flex justify-between items-start mb-2">
-                            <h3 class="text-lg font-bold text-white" x-text="album[0].name"></h3>
+                            <h3 class="font-cinzel text-lg font-bold text-white" x-text="album[0].name"></h3>
                             <span class="text-xs text-gray-400" x-text="album[0].date"></span>
                         </div>
                         

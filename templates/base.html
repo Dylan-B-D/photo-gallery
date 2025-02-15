@@ -40,6 +40,9 @@
             backdropBlur: {
               xs: '2px',
             },
+            dropShadow: {
+              'emerald': '0 4px 6px rgba(16, 185, 129, 0.5)', // Customize the shadow as needed
+            },
           },
         },
       };
@@ -92,6 +95,19 @@
       .album-page nav .flex {
         height: auto; /* Override h-16 for album page */
       }
+
+      .fa-chevron-left, .fa-chevron-right {
+            font-size: 1.5rem;
+        }
+
+        .fa-info-circle {
+            font-size: 1.2rem;
+        }
+
+        .metadata-panel {
+            max-width: 300px;
+            word-wrap: break-word;
+        }
     </style>
     {% block head %}{% endblock %}
   </head>
