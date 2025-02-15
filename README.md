@@ -124,8 +124,4 @@ The application uses Minijinja's auto-reloading feature in development mode. Thi
 ## Troubleshooting
 
 * **Tailwind CSS Not Working in Production**: Ensure you've compiled Tailwind CSS and set `APP_ENV=production`
-* **Auto-Reloading Not Working**: Ensure `AUTO_RELOAD_MODE` is set to `1` or `2` and `APP_ENV=development`
-
-## License
-
-This project is licensed under the MIT License. See the LICENSE file for details.
+* **Auto-Reloading Not Working**: Ensure `AUTO_RELOAD_MODE` is set to `2` and `APP_ENV=development`
