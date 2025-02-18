@@ -1,5 +1,3 @@
-// src/handlers/admin.rs
-
 use axum::{
     extract::{Multipart, Path, State},
     http::StatusCode,
@@ -8,7 +6,7 @@ use axum::{
 };
 use minijinja::context;
 use serde_json::{json, Value};
-use std::{error::Error, fs, path::PathBuf, sync::Arc, time::Instant};
+use std::{fs, path::PathBuf, sync::Arc, time::Instant};
 use tower_cookies::Cookies;
 
 pub struct ProcessedImage {
@@ -19,10 +17,10 @@ pub struct ProcessedImage {
 
 use crate::{
     auth::middleware::require_auth,
-    db::{self, create_album, create_image, update_album_metadata},
+    db::{self, create_album, update_album_metadata},
     types::{AppState, CreateAlbumRequest},
     utils::{
-        create_album_directory, delete_album_directory, extract_exif_metadata, generate_unique_filename, process_image, save_image, ImageQuality
+        create_album_directory, delete_album_directory, process_and_save_images, ImageQuality,
     },
 };
 
@@ -33,9 +31,8 @@ pub async fn admin_handler(
     require_auth(cookies, State(state.clone())).await?;
 
     // Get site stats
-    let (album_count, image_count, total_storage) = db::get_site_stats(&state.pool)
-        .await
-        .unwrap_or((0, 0, 0));
+    let (album_count, image_count, total_storage) =
+        db::get_site_stats(&state.pool).await.unwrap_or((0, 0, 0));
 
     // Get albums with oldest image and size
     let albums = db::get_albums_with_oldest_image(&state.pool)
@@ -45,15 +42,16 @@ pub async fn admin_handler(
     let reloader_guard = state.reloader.lock().await;
     let env = reloader_guard.acquire_env().unwrap();
     let tmpl = env.get_template("admin.html").unwrap();
-    let rendered = tmpl.render(context! {
-        album_count => album_count,
-        image_count => image_count,
-        total_storage => (total_storage as f64 / 1024.0 / 1024.0).round(), // Convert to MB
-        albums => albums
-    }).unwrap();
+    let rendered = tmpl
+        .render(context! {
+            album_count => album_count,
+            image_count => image_count,
+            total_storage => (total_storage as f64 / 1024.0 / 1024.0).round(), // Convert to MB
+            albums => albums
+        })
+        .unwrap();
     Ok(Html(rendered))
 }
-
 
 pub async fn create_album_handler(
     State(state): State<Arc<AppState>>,
@@ -136,73 +134,13 @@ pub async fn create_album_handler(
 
     // ===== Image Processing (Concurrent) =====
     let start_image_processing = Instant::now();
-    let mut tasks = Vec::new();
-
-    for (original_filename, data) in image_data {
-        let state = state.clone();
-        let album_id = album_id;
-        let filename = generate_unique_filename(&original_filename);
-
-        tasks.push(tokio::spawn(async move {
-            // Extract EXIF metadata from the image
-            let metadata = extract_exif_metadata(&data).unwrap_or((
-                "Unknown".to_string(),
-                "Unknown".to_string(),
-                "Unknown".to_string(),
-                "Unknown".to_string(),
-                "Unknown".to_string(),
-                "Unknown".to_string(),
-                "Unknown".to_string(),
-                "Unknown".to_string(),
-                "Unknown".to_string(),
-            ));
-
-            // Save the full-resolution image immediately
-            save_image(&data, &filename, album_id, ImageQuality::Full).await?;
-
-            // Process the image into optimized and thumbnail versions
-            let processed = process_image(data).await?;
-
-            // Save optimized and thumbnail versions concurrently
-            let save_optimized = save_image(
-                &processed.optimized,
-                &filename,
-                album_id,
-                ImageQuality::Optimized,
-            );
-            let save_thumbnail = save_image(
-                &processed.thumbnail,
-                &filename,
-                album_id,
-                ImageQuality::Thumbnail,
-            );
-
-            tokio::try_join!(save_optimized, save_thumbnail)?;
-
-            // Create a database entry with image metadata
-            create_image(
-                &state.pool,
-                album_id,
-                &filename,
-                processed.original_size as i64,
-                &metadata.0, // camera_make
-                &metadata.1, // camera_model
-                &metadata.2, // lens_model
-                &metadata.3, // iso
-                &metadata.4, // aperture
-                &metadata.5, // shutter_speed
-                &metadata.6, // focal_length
-                &metadata.7, // light_source
-                &metadata.8, // date_created
-            )
-            .await?;
-
-            Ok::<(), Box<dyn std::error::Error + Send + Sync>>(())
-        }));
-    }
-
-    let results = futures::future::join_all(tasks).await;
-    let processed_images = results.into_iter().filter(|res| res.is_ok()).count();
+    let processed_images = match process_and_save_images(state.clone(), album_id, image_data).await
+    {
+        Ok(count) => count,
+        Err(e) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
+        }
+    };
 
     // Update album metadata
     if let Err(e) = update_album_metadata(&state.pool, album_id).await {
@@ -258,8 +196,6 @@ pub async fn delete_album_handler(
     })))
 }
 
-
-
 pub async fn delete_image_handler(
     Path(image_id): Path<i64>,
     State(state): State<Arc<AppState>>,
@@ -297,79 +233,6 @@ pub async fn delete_image_handler(
     Json(json!({"status": "success"})).into_response()
 }
 
-async fn process_and_save_images(
-    state: Arc<AppState>,
-    album_id: i64,
-    images: Vec<(String, Vec<u8>)>,
-) -> Result<usize, Box<dyn Error + Send + Sync>> {
-    let mut tasks = Vec::new();
-
-    for (original_filename, data) in images {
-        let state = state.clone();
-        let album_id = album_id;
-        let filename = generate_unique_filename(&original_filename);
-
-        tasks.push(tokio::spawn(async move {
-            // Extract EXIF metadata
-            let metadata = extract_exif_metadata(&data).unwrap_or((
-                "Unknown".to_string(),
-                "Unknown".to_string(),
-                "Unknown".to_string(),
-                "Unknown".to_string(),
-                "Unknown".to_string(),
-                "Unknown".to_string(),
-                "Unknown".to_string(),
-                "Unknown".to_string(),
-                "Unknown".to_string(),
-            ));
-
-            // Save full-resolution image
-            save_image(&data, &filename, album_id, ImageQuality::Full).await?;
-
-            // Process the image
-            let processed = process_image(data).await?;
-
-            // Save optimized and thumbnail versions
-            let save_optimized = save_image(
-                &processed.optimized,
-                &filename,
-                album_id,
-                ImageQuality::Optimized,
-            );
-            let save_thumbnail = save_image(
-                &processed.thumbnail,
-                &filename,
-                album_id,
-                ImageQuality::Thumbnail,
-            );
-            tokio::try_join!(save_optimized, save_thumbnail)?;
-
-            // Create database entry
-            create_image(
-                &state.pool,
-                album_id,
-                &filename,
-                processed.original_size as i64,
-                &metadata.0,
-                &metadata.1,
-                &metadata.2,
-                &metadata.3,
-                &metadata.4,
-                &metadata.5,
-                &metadata.6,
-                &metadata.7,
-                &metadata.8,
-            )
-            .await?;
-
-            Ok::<(), Box<dyn Error + Send + Sync>>(())
-        }));
-    }
-
-    let results = futures::future::join_all(tasks).await;
-    Ok(results.into_iter().filter(|r| r.is_ok()).count())
-}
-
 pub async fn update_album_handler(
     Path(album_id): Path<i64>,
     State(state): State<Arc<AppState>>,
@@ -397,7 +260,8 @@ pub async fn update_album_handler(
                     if let Ok(data) = serde_json::from_slice(&bytes) {
                         album_data = Some(data);
                     } else {
-                        return (StatusCode::BAD_REQUEST, "Invalid album data format").into_response();
+                        return (StatusCode::BAD_REQUEST, "Invalid album data format")
+                            .into_response();
                     }
                 }
             }
@@ -462,7 +326,7 @@ pub async fn update_album_handler(
                     eprintln!("Failed to delete image {}: {}", image_id, e);
                     continue;
                 }
-    
+
                 // Delete files
                 let base_path = PathBuf::from("uploads").join(image.album_id.to_string());
                 for quality in [
@@ -487,7 +351,8 @@ pub async fn update_album_handler(
     }
 
     // Process new images
-    let processed_images = match process_and_save_images(state.clone(), album_id, new_images).await {
+    let processed_images = match process_and_save_images(state.clone(), album_id, new_images).await
+    {
         Ok(count) => count,
         Err(e) => {
             return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
@@ -532,7 +397,8 @@ pub async fn get_album_handler(
                     "size": (img.file_size as f64 / 1024.0 / 1024.0).round()
                 })
             }).collect::<Vec<_>>()
-        })).into_response(),
+        }))
+        .into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     }
 }

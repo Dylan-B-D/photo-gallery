@@ -6,10 +6,13 @@ use std::borrow::Cow;
 use std::error::Error;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tokio::{fs, task};
 use uuid::Uuid;
 
+use crate::db::create_image;
 use crate::handlers::admin::ProcessedImage;
+use crate::types::AppState;
 
 pub enum ImageQuality {
     Full,
@@ -110,6 +113,11 @@ pub fn extract_exif_metadata(data: &[u8]) -> Option<(String, String, String, Str
 }
 
 pub async fn process_image(data: Vec<u8>) -> Result<ProcessedImage, Box<dyn Error + Send + Sync>> {
+    const OPTIMIZED_MAX_SIZE: u32 = 1920;
+    const THUMBNAIL_MAX_SIZE: u32 = 400;
+    const OPTIMIZED_QUALITY: i32 = 85;
+    const THUMBNAIL_QUALITY: i32 = 95;
+
     task::spawn_blocking(move || {
         // Decompress JPEG to RGB image
         let rgb_image: RgbImage = turbojpeg::decompress_image(&data)?;
@@ -122,15 +130,15 @@ pub async fn process_image(data: Vec<u8>) -> Result<ProcessedImage, Box<dyn Erro
         // Create resizer with default CPU optimizations
         let mut resizer = Resizer::new();
 
-        // Optimize to max 1920x1920
-        let (opt_width, opt_height) = calculate_dimensions(width, height, 1920);
+        // Optimize to max OPTIMIZED_MAX_SIZE
+        let (opt_width, opt_height) = calculate_dimensions(width, height, OPTIMIZED_MAX_SIZE);
         let mut optimized_img = Image::new(opt_width, opt_height, PixelType::U8x3);
 
         // Resize the image
         resizer.resize(&src_image, &mut optimized_img, None)?;
 
-        // Create thumbnail 400x400
-        let (thumb_width, thumb_height) = calculate_dimensions(width, height, 500);
+        // Create low rez thumbnail
+        let (thumb_width, thumb_height) = calculate_dimensions(width, height, THUMBNAIL_MAX_SIZE);
         let mut thumbnail_img = Image::new(thumb_width, thumb_height, PixelType::U8x3);
 
         resizer.resize(&src_image, &mut thumbnail_img, None)?;
@@ -145,8 +153,8 @@ pub async fn process_image(data: Vec<u8>) -> Result<ProcessedImage, Box<dyn Erro
                 .ok_or("Failed to create thumbnail RGB image")?;
 
         // Compress using turbojpeg
-        let optimized = turbojpeg::compress_image(&optimized_rgb, 85, turbojpeg::Subsamp::Sub2x2)?;
-        let thumbnail = turbojpeg::compress_image(&thumbnail_rgb, 95, turbojpeg::Subsamp::Sub2x2)?;
+        let optimized = turbojpeg::compress_image(&optimized_rgb, OPTIMIZED_QUALITY, turbojpeg::Subsamp::Sub2x2)?;
+        let thumbnail = turbojpeg::compress_image(&thumbnail_rgb, THUMBNAIL_QUALITY, turbojpeg::Subsamp::Sub2x2)?;
 
         Ok(ProcessedImage {
             optimized: optimized.to_vec(),
@@ -180,4 +188,77 @@ pub async fn delete_album_directory(album_id: i64) -> io::Result<()> {
         fs::remove_dir_all(path).await?;
     }
     Ok(())
+}
+
+pub async fn process_and_save_images(
+    state: Arc<AppState>,
+    album_id: i64,
+    images: Vec<(String, Vec<u8>)>,
+) -> Result<usize, Box<dyn Error + Send + Sync>> {
+    let mut tasks = Vec::new();
+
+    for (original_filename, data) in images {
+        let state = state.clone();
+        let album_id = album_id;
+        let filename = generate_unique_filename(&original_filename);
+
+        tasks.push(tokio::spawn(async move {
+            // Extract EXIF metadata
+            let metadata = extract_exif_metadata(&data).unwrap_or((
+                "Unknown".to_string(),
+                "Unknown".to_string(),
+                "Unknown".to_string(),
+                "Unknown".to_string(),
+                "Unknown".to_string(),
+                "Unknown".to_string(),
+                "Unknown".to_string(),
+                "Unknown".to_string(),
+                "Unknown".to_string(),
+            ));
+
+            // Save full-resolution image
+            save_image(&data, &filename, album_id, ImageQuality::Full).await?;
+
+            // Process the image
+            let processed = process_image(data).await?;
+
+            // Save optimized and thumbnail versions
+            let save_optimized = save_image(
+                &processed.optimized,
+                &filename,
+                album_id,
+                ImageQuality::Optimized,
+            );
+            let save_thumbnail = save_image(
+                &processed.thumbnail,
+                &filename,
+                album_id,
+                ImageQuality::Thumbnail,
+            );
+            tokio::try_join!(save_optimized, save_thumbnail)?;
+
+            // Create database entry
+            create_image(
+                &state.pool,
+                album_id,
+                &filename,
+                processed.original_size as i64,
+                &metadata.0,
+                &metadata.1,
+                &metadata.2,
+                &metadata.3,
+                &metadata.4,
+                &metadata.5,
+                &metadata.6,
+                &metadata.7,
+                &metadata.8,
+            )
+            .await?;
+
+            Ok::<(), Box<dyn Error + Send + Sync>>(())
+        }));
+    }
+
+    let results = futures::future::join_all(tasks).await;
+    Ok(results.into_iter().filter(|r| r.is_ok()).count())
 }
