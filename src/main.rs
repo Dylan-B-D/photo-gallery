@@ -5,6 +5,7 @@ use handlers::admin::admin_handler;
 use handlers::album::album_handler;
 use handlers::home::home_handler;
 use handlers::login::{login_handler, login_post_handler, logout_handler};
+use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tower_cookies::CookieManagerLayer;
@@ -78,9 +79,12 @@ async fn main() {
         .merge(static_router)
         .merge(uploads_router);
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
-        .await
-        .unwrap();
+    // Read host and port from environment variables
+    let host = env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+    let port = env::var("PORT").unwrap_or_else(|_| "3000".to_string());
+    let addr = format!("{}:{}", host, port).parse::<SocketAddr>().unwrap();
+
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     let addr = listener.local_addr().unwrap();
     println!("listening on http://{}", addr);
     axum::serve(
