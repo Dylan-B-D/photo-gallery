@@ -4,23 +4,28 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Browse Dylan's photo gallery featuring professional photography across various albums. View high-quality images with detailed camera information and metadata." />
     <title>{% block title %}Photo Gallery{% endblock %}</title>
-    <!-- Google Fonts -->
+    
+    <!-- Font preconnects -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Exo:ital,wght@0,100..900;1,100..900&family=Merienda:wght@300..900&family=Nunito:ital,wght@0,200..1000;1,200..1000&display=swap" rel="stylesheet">
+    
+    <!-- Primary fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700&family=Merienda:wght@400;700&display=swap" rel="stylesheet" />
+    
+    <!-- Secondary fonts loaded with lower priority -->
+    <link href="https://fonts.googleapis.com/css2?family=Exo:wght@400;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+    
     <link rel="icon" type="image/png" href="/static/favicon.png" />
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
-    />
-    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
-    <script
-      defer
-      src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"
-    ></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+
+    <!-- Defer non-critical JS -->
+    <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    
     {% if app_env == "development" %}
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com" defer></script>
     <script>
       tailwind.config = {
         darkMode: "class",
@@ -49,9 +54,11 @@
     {% else %}
     <link rel="stylesheet" href="/static/css/tailwind.css" />
     {% endif %}
+    
     <style>
+      /* Critical CSS inlined */
       body {
-        background-color: #0f172a; /* slate-950 */
+        background-color: #0f172a;
         position: relative;
         height: 100%;
         width: 100%;
@@ -78,55 +85,67 @@
       }
 
       .custom-scrollbar::-webkit-scrollbar-track {
-        background: #1f2937; /* Gray-800 */
+        background: #1f2937;
         border-radius: 8px;
       }
 
       .custom-scrollbar::-webkit-scrollbar-thumb {
-        background: #4b5563; /* Gray-600 */
+        background: #4b5563;
         border-radius: 8px;
       }
 
       .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-        background: #6b7280; /* Gray-500 */
+        background: #6b7280;
       }
 
       .no-title nav .flex {
-        height: auto; /* Override h-16 for pages with no title */
+        height: auto;
       }
 
       .fa-chevron-left, .fa-chevron-right {
-            font-size: 1.5rem;
-        }
+        font-size: 1.5rem;
+      }
 
-        .fa-info-circle {
-            font-size: 1.2rem;
-        }
+      .fa-info-circle {
+        font-size: 1.2rem;
+      }
 
-        .metadata-panel {
-            max-width: 300px;
-            word-wrap: break-word;
-        }
+      .metadata-panel {
+        max-width: 300px;
+        word-wrap: break-word;
+      }
+
+      /* Skeleton loading animation */
+      @keyframes shimmer {
+        0% { background-position: -1000px 0; }
+        100% { background-position: 1000px 0; }
+      }
+
+      .skeleton {
+        background: linear-gradient(90deg, #1f2937 25%, #374151 50%, #1f2937 75%);
+        background-size: 1000px 100%;
+        animation: shimmer 2s infinite linear;
+      }
     </style>
     {% block head %}{% endblock %}
   </head>
   <body class="bg-background min-h-screen text-gray-100 font-sans {% block body_class %}{% endblock %}">
-    <nav>
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between h-16">
-          <div class="flex-shrink-0 flex items-center">
-            <h1
-              class="text-3xl font-bold text-white tracking-wider font-merienda"
-            >
-              {% block nav_title %}{% endblock %}
-            </h1>
-          </div>
-          <div class="flex items-center">
-            {% block nav_items %}{% endblock %}
+    <header>
+      <nav>
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="flex justify-between h-16">
+            <div class="flex-shrink-0 flex items-center">
+              <h1 class="text-3xl font-bold text-white tracking-wider font-merienda">
+                {% block nav_title %}{% endblock %}
+              </h1>
+            </div>
+            <div class="flex items-center">
+              {% block nav_items %}{% endblock %}
+            </div>
           </div>
         </div>
-      </div>
-    </nav>
+      </nav>
+    </header>
 
     <main class="max-w-7xl mx-auto sm:px-6 lg:px-8">
       {% block content %}{% endblock %}

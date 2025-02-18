@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "base.html" %} 
 
 {% block title %}Dylan's Photos - Home{% endblock %}
 
@@ -15,7 +15,16 @@
     x-data="{ 
         search: '', 
         sort: 'date-desc', 
-        albums: JSON.parse($el.dataset.albums), 
+        albums: JSON.parse($el.dataset.albums),
+        loading: true,
+        options: [
+            { value: 'date-desc', text: 'Newest First' },
+            { value: 'date-asc', text: 'Oldest First' },
+            { value: 'name-asc', text: 'A-Z' },
+            { value: 'name-desc', text: 'Z-A' },
+            { value: 'num-images-desc', text: 'Most Images' },
+            { value: 'num-images-asc', text: 'Fewest Images' }
+        ],
         get filteredAlbums() {
             return this.albums
                 .filter(album => {
@@ -44,7 +53,6 @@
 >
     <!-- Search & Filter -->
     <div class="flex flex-col pt-6 sm:flex-row justify-between items-center mb-6">
-        <!-- Search Bar -->
         <div class="relative w-full sm:w-1/2">
             <input 
                 type="text" 
@@ -55,27 +63,19 @@
             <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
         </div>
 
-        <!-- Sort/Filter Dropdown -->
         <div class="relative w-full sm:w-auto mt-4 sm:mt-0 select-none" 
-             x-data="{ open: false, selected: 'date-desc', options: [
-                { value: 'date-desc', text: 'Newest First' },
-                { value: 'date-asc', text: 'Oldest First' },
-                { value: 'name-asc', text: 'A-Z' },
-                { value: 'name-desc', text: 'Z-A' },
-                { value: 'num-images-desc', text: 'Most Images' },
-                { value: 'num-images-asc', text: 'Fewest Images' }
-             ] }"
+             x-data="{ open: false }"
         >
             <div @click="open = !open" class="drop-shadow-emerald w-full sm:w-auto appearance-none p-2 pl-4 pr-10 border border-gray-700 rounded-lg bg-gray-800 bg-opacity-20 backdrop-blur-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-400 cursor-pointer relative">
-                <span x-text="options.find(option => option.value === selected).text"></span>
+                <span x-text="options.find(option => option.value === sort).text"></span>
                 <i class="fas fa-chevron-down absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none"></i>
             </div>
             <div x-show="open" @click.away="open = false" class="absolute mt-1 w-full sm:w-auto bg-gray-800 bg-opacity-80 backdrop-blur-xs rounded-lg shadow-lg z-10">
                 <template x-for="option in options" :key="option.value">
                     <div 
-                        @click="selected = option.value; $dispatch('sort-changed', option.value); open = false" 
+                        @click="sort = option.value; open = false" 
                         class="p-2 pl-4 pr-10 text-white hover:bg-gray-700 cursor-pointer" 
-                        :class="{ 'bg-gray-700': selected === option.value }" 
+                        :class="{ 'bg-gray-700': sort === option.value }" 
                         x-text="option.text"
                     ></div>
                 </template>
@@ -87,68 +87,62 @@
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pb-6">
         <template x-for="(album, index) in filteredAlbums" :key="index">
             <a :href="'/albums/' + album[0].id" class="group block rounded-lg overflow-hidden shadow-lg transition-all duration-300 hover:shadow-2xl hover:scale-105 relative aspect-[4/3] w-full">
-                <!-- Main Image Container -->
-                <div class="absolute inset-0">
-                    <!-- Skeleton Loader -->
-                    <div x-show="!album[1]" class="w-full h-full flex items-center justify-center text-gray-500">
-                        <div class="animate-pulse bg-gray-700 w-full h-full"></div>
-                    </div>
-        
-                    <!-- Lazy Loaded Image -->
-                    <template x-if="album[1]">
-                        <img 
-                            :src="'/uploads/' + album[0].id + '/thumbnail/' + album[1]"
-                            :alt="album[0].name"
-                            class="w-full h-full object-cover transition-opacity duration-300"
-                            loading="lazy"
-                        >
-                    </template>
-        
-                    <!-- Dark Overlay -->
-                    <div class="absolute inset-0 bg-black opacity-0 transition-opacity duration-300 group-hover:opacity-50"></div>
-        
-                    <!-- View Album Text -->
-                    <div class="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-                        <span class="text-white text-2xl font-bold">View Album</span>
-                    </div>
+              <div class="absolute inset-0">
+                <div x-show="!album[1]" class="w-full h-full flex items-center justify-center text-gray-500">
+                  <div class="animate-pulse bg-gray-700 w-full h-full"></div>
                 </div>
+          
+                <template x-if="album[1]">
+                    <img 
+                    :src="'/uploads/' + album[0].id + '/thumbnail/' + album[1]"
+                    :alt="album[0].name"
+                    class="w-full h-full object-cover transition-opacity duration-300"
+                    :loading="index === 0 ? 'eager' : 'lazy'"
+                    @load="loading = false"
+                  >                  
+                </template>
+          
+                <div class="absolute inset-0 bg-black opacity-0 transition-opacity duration-300 group-hover:opacity-50"></div>
+                <div class="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                  <span class="text-white text-2xl font-bold">View Album</span>
+                </div>
+              </div>
         
-                <!-- Content -->
                 <div class="relative h-full p-4 flex flex-col justify-between">
-                    <!-- Top Section -->
                     <div class="flex justify-between items-start">
-                        <!-- Image count badge -->
                         <div class="bg-black/50 backdrop-blur-sm px-2 py-1 rounded-full text-white text-xs">
                             <i class="fas fa-images mr-1"></i>
                             <span x-text="album[0].num_images"></span>
                         </div>
         
-                        <!-- Date -->
                         <span class="bg-black/50 backdrop-blur-sm px-2 py-1 rounded-full text-white text-xs"
-                            x-text="new Date(album[0].date).getDate() + ['th', 'st', 'nd', 'rd'][(new Date(album[0].date).getDate() % 10 > 3 ? 0 : new Date(album[0].date).getDate() % 10)] + ' ' + 
-                                    new Date(album[0].date).toLocaleString('default', { month: 'short' }) + ' \'' + 
-                                    new Date(album[0].date).getFullYear().toString().slice(-2)">
+                            x-text="new Date(album[0].date).toLocaleDateString('en-US', { 
+                                day: 'numeric', 
+                                month: 'short',
+                                year: '2-digit'
+                            })">
                         </span>
                     </div>
         
-                    <!-- Bottom Section -->
                     <div class="space-y-3">
                         <div>
-                            <h3 class="font-merienda text-xl font-bold text-white drop-shadow-lg text-center" x-text="album[0].name" style="text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8), -2px -2px 4px rgba(0, 0, 0, 0.8), 2px -2px 4px rgba(0, 0, 0, 0.8), -2px 2px 4px rgba(0, 0, 0, 0.8);"></h3>
+                            <h2 class="font-merienda text-xl font-bold text-white drop-shadow-lg text-center" 
+                                x-text="album[0].name" 
+                                style="text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);">
+                            </h2>
                         </div>
         
-                        <!-- Camera Info -->
                         <div class="flex justify-between gap-2 text-xs text-white">
                             <span x-show="album[0].camera_model" 
-                                class="bg-black/50 backdrop-blur-sm px-2 py-1 rounded-full">
+                                class="bg-black/50 backdrop-blur-sm px-2 py-1 rounded-full truncate">
                                 <i class="fas fa-camera mr-1"></i>
                                 <span x-text="album[0].camera_model"></span>
                             </span>
                             
                             <span x-show="album[0].lens_model" 
-                                class="bg-black/50 backdrop-blur-sm px-2 py-1 rounded-full">
+                                class="bg-black/50 backdrop-blur-sm px-2 py-1 rounded-full truncate">
                                 <i class="fas fa-circle mr-1"></i>
-                                <span x-text="album[0].lens_model.length > 15 ? album[0].lens_model.substring(0, 15) + '...' : album[0].lens_model"></span>
+                                <span x-text="album[0].lens_model"></span>
                             </span>
                             
                             <span x-show="album[0].aperture" 
