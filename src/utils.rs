@@ -18,7 +18,7 @@ pub enum ImageQuality {
 }
 
 impl ImageQuality {
-    fn as_str(&self) -> &'static str {
+    pub fn as_str(&self) -> &'static str {
         match self {
             ImageQuality::Full => "full",
             ImageQuality::Optimized => "optimized",

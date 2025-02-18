@@ -3,7 +3,11 @@
 {% block body_class %}no-title{% endblock %}
 
 {% block title %}Admin Dashboard - Photo Gallery{% endblock %} {% block content %}
-<div x-data="{ showCreateAlbumForm: false }" class="h-full">
+<div x-data="{ 
+  showCreateAlbumForm: false, 
+  showEditAlbumForm: false, 
+  editingAlbum: null 
+}" class="h-full">
   {# Navigation section with flexbox layout #}
   <div class="flex flex-col md:flex-row justify-between items-center py-4 relative">
     <!-- Home button -->
@@ -373,6 +377,367 @@
     </div>
   </template>
 
+  <!-- Edit Album Modal template -->
+  <template x-if="showEditAlbumForm">
+    <div class="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center">
+      <div
+        class="bg-gray-800 w-full h-full p-8 relative flex flex-col justify-center"
+        x-data="{
+          albumId: '',
+          albumName: '',
+          description: '',
+          date: '',
+          images: [],
+          existingImages: [],
+          deletedImages: [],
+          loadingImages: false,
+          isSubmitting: false,
+          // Initialize the edit form by fetching data from the backend
+          init() {
+            fetch(`/api/albums/${this.editingAlbum}`)
+              .then(response => response.json())
+              .then(data => {
+                if (data.status === 'success') {
+                  const album = data.album;
+                  this.albumId = album.id;
+                  this.albumName = album.name;
+                  this.description = album.description;
+                  this.date = album.date;
+                  // Map the images from the response to existingImages
+                  this.existingImages = data.images.map(img => ({
+                    id: img.id,
+                    name: img.name,
+                    thumbnail: img.thumbnail,
+                    size: img.size.toFixed(2)
+                  }));
+                  this.deletedImages = [];
+                }
+              })
+              .catch(error => console.error('Error fetching album data:', error));
+          },
+          createThumbnail(file) {
+            return new Promise((resolve) => {
+              // Use createImageBitmap for faster processing
+              const reader = new FileReader();
+              reader.onload = async (e) => {
+                try {
+                  // Create a bitmap first (this is faster than creating an Image)
+                  const bitmap = await createImageBitmap(file, {
+                    resizeWidth: 300,
+                    resizeHeight: 300,
+                    resizeQuality: 'medium'
+                  });
+                  
+                  // Use offscreen canvas when available for better performance
+                  const canvas = document.createElement('canvas');
+                  const ctx = canvas.getContext('2d');
+                  
+                  // Set dimensions maintaining aspect ratio
+                  const maxSize = 300;
+                  let width = bitmap.width;
+                  let height = bitmap.height;
+                  
+                  if (width > height) {
+                    if (width > maxSize) {
+                      height = Math.round(height * (maxSize / width));
+                      width = maxSize;
+                    }
+                  } else {
+                    if (height > maxSize) {
+                      width = Math.round(width * (maxSize / height));
+                      height = maxSize;
+                    }
+                  }
+                  
+                  canvas.width = width;
+                  canvas.height = height;
+                  
+                  // Draw and compress
+                  ctx.drawImage(bitmap, 0, 0, width, height);
+                  bitmap.close(); // Clean up the bitmap
+                  
+                  // Use lower quality for even faster processing
+                  const thumbnail = canvas.toDataURL('image/jpeg', 0.9);
+                  resolve(thumbnail);
+                } catch (err) {
+                  // Fallback for browsers that don't support createImageBitmap
+                  const img = new Image();
+                  img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    const maxSize = 300;
+                    let width = img.width;
+                    let height = img.height;
+                    
+                    if (width > height) {
+                      if (width > maxSize) {
+                        height *= maxSize / width;
+                        width = maxSize;
+                      }
+                    } else {
+                      if (height > maxSize) {
+                        width *= maxSize / height;
+                        height = maxSize;
+                      }
+                    }
+                    
+                    canvas.width = width;
+                    canvas.height = height;
+                    ctx.drawImage(img, 0, 0, width, height);
+                    const thumbnail = canvas.toDataURL('image/jpeg', 0.6);
+                    resolve(thumbnail);
+                  };
+                  img.src = e.target.result;
+                }
+              };
+              reader.readAsDataURL(file);
+            });
+          },
+          async handleImageUpload(event) {
+            this.loadingImages = true;
+            const files = Array.from(event.target.files);
+            const batchSize = 4;
+            const processedImages = [];
+
+            for (let i = 0; i < files.length; i += batchSize) {
+              const batch = files.slice(i, i + batchSize);
+              const batchResults = await Promise.all(
+                batch.map(async file => {
+                  const thumbnail = await this.createThumbnail(file);
+                  return {
+                    id: URL.createObjectURL(file),
+                    file,
+                    thumbnail,
+                    name: file.name,
+                    size: (file.size / (1024 * 1024)).toFixed(2)
+                  };
+                })
+              );
+              processedImages.push(...batchResults);
+              this.images = [...this.images, ...batchResults];
+            }
+            this.loadingImages = false;
+          },
+          removeImage(id) {
+            if (typeof id === 'string' && id.startsWith('blob:')) {
+              URL.revokeObjectURL(id);
+              this.images = this.images.filter(img => img.id !== id);
+            } else {
+              // When removing an existing image, add it to deletedImages array
+              const imageToDelete = this.existingImages.find(img => img.id === id);
+              if (imageToDelete) {
+                this.deletedImages.push(imageToDelete.id);
+              }
+              this.existingImages = this.existingImages.filter(img => img.id !== id);
+            }
+          },
+          removeAllImages() {
+            // Add all existing image IDs to deletedImages before clearing
+            this.deletedImages = [...this.deletedImages, ...this.existingImages.map(img => img.id)];
+            
+            // Clear the arrays
+            this.images.forEach(img => URL.revokeObjectURL(img.id));
+            this.images = [];
+            this.existingImages = [];
+          },
+          handleSubmit() {
+            if (this.isSubmitting) return;
+            this.isSubmitting = true;
+            const formData = new FormData();
+
+            // album data
+            const albumData = {
+              id: this.albumId,
+              name: this.albumName,
+              description: this.description,
+              date: this.date,
+            };
+
+            const albumBlob = new Blob([JSON.stringify(albumData)], {
+              type: 'application/json'
+            });
+            formData.append('album', albumBlob);
+            formData.append('deleted_images', this.deletedImages.join(','));
+
+            // Append new images
+            this.images.forEach((img, index) => {
+              formData.append('new_images', img.file, img.name);
+            });
+
+            fetch(`/api/albums/${this.albumId}`, {
+              method: 'PUT',
+              body: formData,
+            })
+              .then(async response => {
+                const data = await response.json();
+                if (data.status === 'success') {
+                  alert('Album updated successfully!');
+                  this.showEditAlbumForm = false;
+                  window.location.reload();
+                } else {
+                  throw new Error(data.message || 'Failed to update album');
+                }
+              })
+              .catch(error => {
+                console.error('Error updating album:', error);
+                alert(error.message || 'Failed to update album');
+              })
+              .finally(() => {
+                this.isSubmitting = false;
+              });
+          }
+        }"
+        x-init="init()"
+      >
+        <!-- Close button -->
+        <button
+          @click="showEditAlbumForm = false"
+          class="absolute top-4 right-4 text-gray-400 hover:text-white"
+        >
+          <i class="fas fa-times"></i>
+        </button>
+
+        <!-- Clear all images button -->
+        <button
+          @click="removeAllImages"
+          class="absolute top-4 right-16 text-red-500 hover:text-red-700"
+          x-show="images.length > 0 || existingImages.length > 0"
+        >
+          <i class="fas fa-trash"></i> Clear All
+        </button>
+
+        <h3 class="text-2xl font-bold text-white mb-6">Edit Album</h3>
+
+        <form
+          @submit.prevent="handleSubmit"
+          class="space-y-6"
+          enctype="multipart/form-data"
+        >
+          <div class="flex gap-4">
+            <div class="w-2/3">
+              <label class="block text-sm font-medium text-gray-300">Album Name</label>
+              <input
+                type="text"
+                x-model="albumName"
+                class="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-white"
+                required
+              />
+            </div>
+            <div class="w-1/3">
+              <label class="block text-sm font-medium text-gray-300">Date</label>
+              <input
+                type="date"
+                x-model="date"
+                class="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-white"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-300">Description</label>
+            <textarea
+              x-model="description"
+              class="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-white"
+              rows="3"
+            ></textarea>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-300">
+              Add New Images <span x-text="images.length"></span>
+            </label>
+            <input
+              type="file"
+              @change="handleImageUpload"
+              multiple
+              accept="image/*"
+              class="mt-1 block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-500 file:bg-opacity-20 hover:file:bg-opacity-40 file:text-blue-500 hover:file:text-white transition-colors duration-200"
+            />
+          </div>
+
+          <div class="max-h-[52vh] overflow-y-auto border border-gray-700 rounded-lg p-4">
+            <!-- Existing Images -->
+            <div class="mb-4">
+              <h4 class="text-white font-semibold mb-2">Existing Images</h4>
+              <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <template x-for="img in existingImages" :key="img.id">
+                  <div class="relative group">
+                    <img
+                      :src="img.thumbnail"
+                      :alt="img.name"
+                      class="w-full h-32 object-cover rounded-lg"
+                      loading="lazy"
+                    />
+                    <button
+                      @click="removeImage(img.id)"
+                      type="button"
+                      class="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <i class="fas fa-times"></i>
+                    </button>
+                    <div class="text-xs text-gray-400 mt-1">
+                      <span x-text="img.name.slice(0, 20) + '...'"></span>
+                      (<span x-text="img.size"></span> MB)
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <!-- New Images -->
+            <div x-show="images.length > 0">
+              <h4 class="text-white font-semibold mb-2">New Images</h4>
+              <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <template x-if="loadingImages">
+                  <template x-for="i in 4" :key="i">
+                    <div class="animate-pulse">
+                      <div class="bg-gray-700 h-32 rounded-lg"></div>
+                      <div class="h-4 bg-gray-700 rounded mt-2 w-3/4"></div>
+                    </div>
+                  </template>
+                </template>
+
+                <template x-for="img in images" :key="img.id">
+                  <div class="relative group">
+                    <img
+                      :src="img.thumbnail"
+                      :alt="img.name"
+                      class="w-full h-32 object-cover rounded-lg"
+                      loading="lazy"
+                    />
+                    <button
+                      @click="removeImage(img.id)"
+                      type="button"
+                      class="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <i class="fas fa-times"></i>
+                    </button>
+                    <div class="text-xs text-gray-400 mt-1">
+                      <span x-text="img.name.slice(0, 20) + '...'"></span>
+                      (<span x-text="img.size"></span> MB)
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            class="w-full bg-blue-500 bg-opacity-20 hover:bg-opacity-40 text-blue-500 hover:text-white rounded-lg py-2 px-4 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            :disabled="isSubmitting"
+          >
+            <span x-show="!isSubmitting">Update Album</span>
+            <span x-show="isSubmitting">Updating...</span>
+          </button>
+        </form>
+      </div>
+    </div>
+  </template>
+
+
   {# Main content #}
   <div class="px-4 py-6 sm:px-0">
     {# Stats Section #}
@@ -445,8 +810,12 @@
                 </div>
                 
                 <div class="flex justify-between items-center">
-                  <button class="bg-gray-800 text-white w-full px-2 py-1 rounded-l hover:bg-gray-600" style="text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);">
-                      <i class="fas fa-edit"></i> Edit
+                  <button 
+                    class="bg-gray-800 text-white w-full px-2 py-1 rounded-l hover:bg-gray-600" 
+                    style="text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);"
+                    @click="editingAlbum = {{ album.id }}; showEditAlbumForm = true;"
+                  >
+                    <i class="fas fa-edit"></i> Edit
                   </button>
                   <button 
                       class="bg-red-400 text-white w-full px-2 py-1 rounded-r hover:bg-red-300" 

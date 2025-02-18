@@ -76,42 +76,46 @@ pub async fn update_album_metadata(pool: &SqlitePool, album_id: i64) -> Result<(
     sqlx::query!(
         r#"
         UPDATE albums 
-        SET camera_model = (
-            SELECT camera_model 
-            FROM images 
-            WHERE album_id = ? 
-            GROUP BY camera_model 
-            ORDER BY COUNT(*) DESC 
-            LIMIT 1
-        ),
-        lens_model = (
-            SELECT lens_model 
-            FROM images 
-            WHERE album_id = ? 
-            GROUP BY lens_model 
-            ORDER BY COUNT(*) DESC 
-            LIMIT 1
-        ),
-        aperture = (
-            SELECT aperture 
-            FROM images 
-            WHERE album_id = ? 
-            GROUP BY aperture 
-            ORDER BY COUNT(*) DESC 
-            LIMIT 1
-        )
+        SET 
+            num_images = (SELECT COUNT(*) FROM images WHERE album_id = ?),
+            camera_model = (
+                SELECT camera_model 
+                FROM images 
+                WHERE album_id = ? 
+                GROUP BY camera_model 
+                ORDER BY COUNT(*) DESC 
+                LIMIT 1
+            ),
+            lens_model = (
+                SELECT lens_model 
+                FROM images 
+                WHERE album_id = ? 
+                GROUP BY lens_model 
+                ORDER BY COUNT(*) DESC 
+                LIMIT 1
+            ),
+            aperture = (
+                SELECT aperture 
+                FROM images 
+                WHERE album_id = ? 
+                GROUP BY aperture 
+                ORDER BY COUNT(*) DESC 
+                LIMIT 1
+            )
         WHERE id = ?
         "#,
-        album_id,
-        album_id,
-        album_id,
-        album_id
+        album_id, // for num_images
+        album_id, // for camera_model
+        album_id, // for lens_model
+        album_id, // for aperture
+        album_id  // for the WHERE clause
     )
     .execute(pool)
     .await?;
 
     Ok(())
 }
+
 
 pub async fn get_albums_with_oldest_image(
     pool: &SqlitePool,
@@ -295,5 +299,68 @@ pub async fn delete_album(pool: &SqlitePool, album_id: i64) -> Result<(), sqlx::
         .execute(pool)
         .await?;
         
+    Ok(())
+}
+
+pub async fn delete_image(pool: &SqlitePool, image_id: i64) -> Result<(), sqlx::Error> {
+    sqlx::query!("DELETE FROM images WHERE id = ?", image_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+pub async fn get_image(pool: &SqlitePool, image_id: i64) -> Result<Option<Image>, sqlx::Error> {
+    let result = sqlx::query!(
+        r#"
+        SELECT 
+            id, album_id, filename, camera_make, camera_model, 
+            lens_model, iso, aperture, shutter_speed, focal_length,
+            light_source, date_created, file_size
+        FROM images
+        WHERE id = ?
+        "#,
+        image_id
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    if let Some(row) = result {
+        Ok(Some(Image {
+            id: row.id,
+            album_id: row.album_id,
+            filename: row.filename,
+            camera_make: row.camera_make,
+            camera_model: row.camera_model,
+            lens_model: row.lens_model,
+            iso: row.iso,
+            aperture: row.aperture,
+            shutter_speed: row.shutter_speed,
+            focal_length: row.focal_length,
+            light_source: row.light_source,
+            date_created: row.date_created,
+            file_size: row.file_size.unwrap_or(0),
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
+pub async fn update_album_details(
+    pool: &SqlitePool,
+    album_id: i64,
+    name: &str,
+    description: &Option<String>,
+    date: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "UPDATE albums SET name = $1, description = $2, date = $3 WHERE id = $4",
+        name,
+        description,
+        date,
+        album_id
+    )
+    .execute(pool)
+    .await?;
+
     Ok(())
 }

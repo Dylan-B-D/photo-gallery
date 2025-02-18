@@ -1,4 +1,4 @@
-use axum::routing::{delete, get, post};
+use axum::routing::{delete, get, post, put};
 use axum::Router;
 use dotenv::dotenv;
 use handlers::admin::admin_handler;
@@ -54,7 +54,19 @@ async fn main() {
         .route("/admin", get(admin_handler))
         .route("/albums/{id}", get(album_handler))
         .route("/api/albums", post(handlers::admin::create_album_handler))
-        .route("/api/albums/{id}", delete(handlers::admin::delete_album_handler))
+        .route(
+            "/api/albums/{id}",
+            delete(handlers::admin::delete_album_handler),
+        )
+        .route(
+            "/api/albums/{id}",
+            put(handlers::admin::update_album_handler),
+        )
+        .route("/api/albums/{id}", get(handlers::admin::get_album_handler))
+        .route(
+            "/api/images/{id}",
+            delete(handlers::admin::delete_image_handler),
+        )
         .route("/logout", get(logout_handler))
         .layer(CookieManagerLayer::new())
         .layer(GovernorLayer {
