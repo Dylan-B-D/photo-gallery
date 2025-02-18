@@ -1,3 +1,6 @@
+use axum::extract::Multipart;
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
 use fast_image_resize::images::Image;
 use fast_image_resize::{PixelType, Resizer};
 use image::RgbImage;
@@ -12,7 +15,7 @@ use uuid::Uuid;
 
 use crate::db::create_image;
 use crate::handlers::admin::ProcessedImage;
-use crate::types::AppState;
+use crate::types::{AppState, CreateAlbumRequest};
 
 pub enum ImageQuality {
     Full,
@@ -261,4 +264,71 @@ pub async fn process_and_save_images(
 
     let results = futures::future::join_all(tasks).await;
     Ok(results.into_iter().filter(|r| r.is_ok()).count())
+}
+
+/// Extracts multipart fields from the stream.
+/// - `album_field`: the field name that contains the album JSON.
+/// - `image_field`: the field name that contains image file data.
+/// - `deleted_field`: optional field name for a comma‐separated list of deleted image IDs.
+pub async fn extract_multipart_fields(
+    mut multipart: Multipart,
+    album_field: &str,
+    image_field: &str,
+    deleted_field: Option<&str>,
+) -> Result<(Option<CreateAlbumRequest>, Vec<(String, Vec<u8>)>, Vec<i64>), impl IntoResponse> {
+    let mut album_data: Option<CreateAlbumRequest> = None;
+    let mut images: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut deleted_ids: Vec<i64> = Vec::new();
+
+    while let Ok(Some(mut field)) = multipart.next_field().await {
+        let field_name = field.name().unwrap_or("").to_string();
+        match field_name.as_str() {
+            f if f == album_field => {
+                if let Ok(bytes) = field.bytes().await {
+                    match serde_json::from_slice(&bytes) {
+                        Ok(data) => album_data = Some(data),
+                        Err(_) => {
+                            return Err((
+                                StatusCode::BAD_REQUEST,
+                                "Invalid album data format",
+                            )
+                                .into_response())
+                        }
+                    }
+                }
+            }
+            f if f == image_field => {
+                let filename = field
+                    .file_name()
+                    .map(ToString::to_string)
+                    .unwrap_or_else(|| "unknown.jpg".to_string());
+                let mut file_bytes = Vec::new();
+                while let Ok(Some(chunk)) = field.chunk().await {
+                    file_bytes.extend_from_slice(&chunk);
+                }
+                if !file_bytes.is_empty() {
+                    images.push((filename, file_bytes));
+                }
+            }
+            f if deleted_field.is_some() && f == deleted_field.unwrap() => {
+                if let Ok(bytes) = field.bytes().await {
+                    let ids_str = String::from_utf8_lossy(&bytes);
+                    deleted_ids = ids_str
+                        .split(',')
+                        .filter_map(|s| {
+                            let trimmed = s.trim();
+                            if !trimmed.is_empty() {
+                                trimmed.parse::<i64>().ok()
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                }
+            }
+            _ => continue,
+        }
+    }
+
+    Ok((album_data, images, deleted_ids))
 }

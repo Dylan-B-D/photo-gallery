@@ -18,9 +18,10 @@ pub struct ProcessedImage {
 use crate::{
     auth::middleware::require_auth,
     db::{self, create_album, update_album_metadata},
-    types::{AppState, CreateAlbumRequest},
+    types::AppState,
     utils::{
-        create_album_directory, delete_album_directory, process_and_save_images, ImageQuality,
+        create_album_directory, delete_album_directory, extract_multipart_fields,
+        process_and_save_images, ImageQuality,
     },
 };
 
@@ -56,8 +57,8 @@ pub async fn admin_handler(
 pub async fn create_album_handler(
     State(state): State<Arc<AppState>>,
     cookies: Cookies,
-    mut multipart: Multipart,
-) -> Response {
+    multipart: Multipart,
+) -> impl IntoResponse {
     let start_total = Instant::now();
 
     // Require authentication.
@@ -67,45 +68,14 @@ pub async fn create_album_handler(
 
     // ===== Multipart Extraction =====
     let start_multipart = Instant::now();
-    let mut album_data: Option<CreateAlbumRequest> = None;
-    let mut image_data: Vec<(String, Vec<u8>)> = Vec::new();
-
-    while let Ok(Some(mut field)) = multipart.next_field().await {
-        let name = field.name().unwrap_or("").to_string();
-
-        match name.as_str() {
-            "album" => {
-                if let Ok(bytes) = field.bytes().await {
-                    if let Ok(data) = serde_json::from_slice(&bytes) {
-                        album_data = Some(data);
-                    } else {
-                        return (StatusCode::BAD_REQUEST, "Invalid album data format")
-                            .into_response();
-                    }
-                }
-            }
-            "images" => {
-                let filename = field
-                    .file_name()
-                    .map(ToString::to_string)
-                    .unwrap_or_else(|| "unknown.jpg".to_string());
-
-                let mut image_bytes = Vec::new();
-                while let Ok(Some(chunk)) = field.chunk().await {
-                    image_bytes.extend_from_slice(&chunk);
-                }
-
-                if !image_bytes.is_empty() {
-                    image_data.push((filename, image_bytes));
-                }
-            }
-            _ => continue,
-        }
-    }
+    let (album_data_opt, image_data, _) =
+        match extract_multipart_fields(multipart, "album", "images", None).await {
+            Ok(result) => result,
+            Err(resp) => return resp.into_response(),
+        };
     let multipart_duration = start_multipart.elapsed();
-    println!("Multipart extraction took: {:?}", multipart_duration);
 
-    let album_data = match album_data {
+    let album_data = match album_data_opt {
         Some(data) => data,
         None => return (StatusCode::BAD_REQUEST, "Missing album data").into_response(),
     };
@@ -127,10 +97,6 @@ pub async fn create_album_handler(
             .into_response();
     }
     let album_creation_duration = start_album_creation.elapsed();
-    println!(
-        "Album creation and directory setup took: {:?}",
-        album_creation_duration
-    );
 
     // ===== Image Processing (Concurrent) =====
     let start_image_processing = Instant::now();
@@ -148,13 +114,7 @@ pub async fn create_album_handler(
     }
 
     let image_processing_duration = start_image_processing.elapsed();
-    println!(
-        "Image processing loop took: {:?}",
-        image_processing_duration
-    );
-
     let total_duration = start_total.elapsed();
-    println!("Total handler execution time: {:?}", total_duration);
 
     Json(json!({
         "status": "success",
@@ -166,6 +126,102 @@ pub async fn create_album_handler(
             "image_processing": format!("{:?}", image_processing_duration),
             "total": format!("{:?}", total_duration)
         }
+    }))
+    .into_response()
+}
+
+pub async fn update_album_handler(
+    Path(album_id): Path<i64>,
+    State(state): State<Arc<AppState>>,
+    cookies: Cookies,
+    multipart: Multipart,
+) -> impl IntoResponse {
+    let start_total = Instant::now();
+
+    // Authentication check
+    if let Err(redirect) = require_auth(cookies, State(state.clone())).await {
+        return redirect.into_response();
+    }
+
+    // ===== Multipart Extraction =====
+    let (album_data, new_images, deleted_image_ids) =
+        match extract_multipart_fields(multipart, "album", "new_images", Some("deleted_images"))
+            .await
+        {
+            Ok(result) => result,
+            Err(resp) => return resp.into_response(),
+        };
+
+    // Update album metadata if provided
+    if let Some(album_data) = &album_data {
+        if let Err(e) = db::update_album_details(
+            &state.pool,
+            album_id,
+            &album_data.name,
+            &album_data.description,
+            &album_data.date,
+        )
+        .await
+        {
+            return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
+        }
+    }
+
+    // Delete requested images
+    let mut deleted_count = 0;
+    for image_id in deleted_image_ids {
+        match db::get_image(&state.pool, image_id).await {
+            Ok(Some(image)) => {
+                // Delete from database
+                if let Err(e) = db::delete_image(&state.pool, image_id).await {
+                    eprintln!("Failed to delete image {}: {}", image_id, e);
+                    continue;
+                }
+
+                // Delete files
+                let base_path = PathBuf::from("uploads").join(image.album_id.to_string());
+                for quality in [
+                    ImageQuality::Full,
+                    ImageQuality::Optimized,
+                    ImageQuality::Thumbnail,
+                ] {
+                    let file_path = base_path.join(quality.as_str()).join(&image.filename);
+                    if let Err(e) = fs::remove_file(file_path) {
+                        eprintln!("Failed to delete file: {}", e);
+                    }
+                }
+                deleted_count += 1;
+            }
+            Ok(None) => {
+                println!("Image ID {} not found in database", image_id);
+            }
+            Err(e) => {
+                eprintln!("Error fetching image {}: {}", image_id, e);
+            }
+        }
+    }
+
+    // Process new images
+    let processed_images = match process_and_save_images(state.clone(), album_id, new_images).await
+    {
+        Ok(count) => count,
+        Err(e) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
+        }
+    };
+
+    // Update album statistics
+    if let Err(e) = db::update_album_metadata(&state.pool, album_id).await {
+        eprintln!("Failed to update album metadata: {}", e);
+    }
+
+    Json(json!({
+        "status": "success",
+        "album_id": album_id,
+        "updated_fields": album_data.is_some(),
+        "deleted_images": deleted_count,
+        "new_images_added": processed_images,
+        "processing_time": format!("{:?}", start_total.elapsed())
     }))
     .into_response()
 }
@@ -231,148 +287,6 @@ pub async fn delete_image_handler(
     }
 
     Json(json!({"status": "success"})).into_response()
-}
-
-pub async fn update_album_handler(
-    Path(album_id): Path<i64>,
-    State(state): State<Arc<AppState>>,
-    cookies: Cookies,
-    mut multipart: Multipart,
-) -> Response {
-    let start_total = Instant::now();
-
-    // Authentication check
-    if let Err(redirect) = require_auth(cookies, State(state.clone())).await {
-        return redirect.into_response();
-    }
-
-    // Multipart extraction
-    let mut album_data: Option<CreateAlbumRequest> = None;
-    let mut new_images = Vec::new();
-    let mut deleted_image_ids = Vec::new();
-
-    while let Ok(Some(mut field)) = multipart.next_field().await {
-        let field_name = field.name().unwrap_or("").to_string();
-
-        match field_name.as_str() {
-            "album" => {
-                if let Ok(bytes) = field.bytes().await {
-                    if let Ok(data) = serde_json::from_slice(&bytes) {
-                        album_data = Some(data);
-                    } else {
-                        return (StatusCode::BAD_REQUEST, "Invalid album data format")
-                            .into_response();
-                    }
-                }
-            }
-            "new_images" => {
-                let filename = field
-                    .file_name()
-                    .map(ToString::to_string)
-                    .unwrap_or_else(|| "unknown.jpg".to_string());
-
-                let mut image_bytes = Vec::new();
-                while let Ok(Some(chunk)) = field.chunk().await {
-                    image_bytes.extend_from_slice(&chunk);
-                }
-
-                if !image_bytes.is_empty() {
-                    new_images.push((filename, image_bytes));
-                }
-            }
-            "deleted_images" => {
-                if let Ok(bytes) = field.bytes().await {
-                    let ids_str = String::from_utf8_lossy(&bytes);
-                    deleted_image_ids = ids_str
-                        .split(',')
-                        .filter_map(|s| {
-                            let trimmed = s.trim();
-                            if !trimmed.is_empty() {
-                                trimmed.parse::<i64>().ok()
-                            } else {
-                                None
-                            }
-                        })
-                        .collect();
-                }
-            }
-            _ => continue,
-        }
-    }
-
-    // Update album metadata if provided
-    if let Some(album_data) = &album_data {
-        if let Err(e) = db::update_album_details(
-            &state.pool,
-            album_id,
-            &album_data.name,
-            &album_data.description,
-            &album_data.date,
-        )
-        .await
-        {
-            return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
-        }
-    }
-
-    // Delete requested images
-    let mut deleted_count = 0;
-
-    for image_id in deleted_image_ids {
-        match db::get_image(&state.pool, image_id).await {
-            Ok(Some(image)) => {
-                // Delete from database
-                if let Err(e) = db::delete_image(&state.pool, image_id).await {
-                    eprintln!("Failed to delete image {}: {}", image_id, e);
-                    continue;
-                }
-
-                // Delete files
-                let base_path = PathBuf::from("uploads").join(image.album_id.to_string());
-                for quality in [
-                    ImageQuality::Full,
-                    ImageQuality::Optimized,
-                    ImageQuality::Thumbnail,
-                ] {
-                    let file_path = base_path.join(quality.as_str()).join(&image.filename);
-                    if let Err(e) = fs::remove_file(file_path) {
-                        eprintln!("Failed to delete file: {}", e);
-                    }
-                }
-                deleted_count += 1;
-            }
-            Ok(None) => {
-                println!("Image ID {} not found in database", image_id);
-            }
-            Err(e) => {
-                eprintln!("Error fetching image {}: {}", image_id, e);
-            }
-        }
-    }
-
-    // Process new images
-    let processed_images = match process_and_save_images(state.clone(), album_id, new_images).await
-    {
-        Ok(count) => count,
-        Err(e) => {
-            return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
-        }
-    };
-
-    // Update album statistics
-    if let Err(e) = db::update_album_metadata(&state.pool, album_id).await {
-        eprintln!("Failed to update album metadata: {}", e);
-    }
-
-    Json(json!({
-        "status": "success",
-        "album_id": album_id,
-        "updated_fields": album_data.is_some(),
-        "deleted_images": deleted_count,
-        "new_images_added": processed_images,
-        "processing_time": format!("{:?}", start_total.elapsed())
-    }))
-    .into_response()
 }
 
 pub async fn get_album_handler(
