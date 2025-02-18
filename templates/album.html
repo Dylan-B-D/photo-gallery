@@ -2,7 +2,7 @@
 
 {% block body_class %}no-title{% endblock %}
 
-{% block title %}{{ album.name }} - Dylan's Photo Gallery{% endblock %}
+{% block title %}{{ album.name }} - Dylan's Photos{% endblock %}
 
 {% block content %}
 <div 
@@ -23,7 +23,7 @@
       </div>
       <!-- Album Name/Description -->
       <div class="col-span-4 flex flex-col items-center text-center">
-        <h1 class="text-3xl font-bold font-cinzel text-white mb-1">{{ album.name }}</h1>
+        <h1 class="text-3xl font-bold font-merienda text-white mb-1">{{ album.name }}</h1>
         {% if album.description %}
         <p class="text-gray-400">{{ album.description }}</p>
         {% endif %}
@@ -167,44 +167,44 @@
           x-show="showMetadata" 
           class="fixed top-16 right-4 bg-black bg-opacity-40 backdrop-blur-md text-white p-4 rounded max-w-xs z-50"
         >
-          <h3 class="font-bold mb-2 font-cinzel">Image Metadata</h3>
+          <h3 class="font-bold mb-2">Image Metadata</h3>
           <div class="text-sm space-y-2">
             <div class="flex justify-between">
-                <span class="font-cinzel font-medium">Camera:</span>
+                <span class="font-medium">Camera:</span>
                 <span x-text="images[currentImageIndex].camera_make || 'Unknown'" class="font-mono"></span>
               </div>
             <div class="flex justify-between">
-              <span class="font-cinzel font-medium">Model:</span>
+              <span class="font-medium">Model:</span>
               <span x-text="images[currentImageIndex].camera_model || 'Unknown'" class="font-mono"></span>
             </div>
             <div class="flex justify-between">
-              <span class="font-cinzel font-medium">Lens:</span>
+              <span class="font-medium">Lens:</span>
               <span x-text="images[currentImageIndex].lens_model || 'Unknown'" class="font-mono"></span>
             </div>
             <div class="border-t border-gray-700 my-2"></div>
             <div class="flex justify-between">
-              <span class="font-cinzel font-medium">Aperture:</span>
+              <span class="font-medium">Aperture:</span>
               <span x-text="images[currentImageIndex].aperture || 'Unknown'" class="font-mono"></span>
             </div>
             <div class="flex justify-between">
-              <span class="font-cinzel font-medium">Shutter:</span>
+              <span class="font-medium">Shutter:</span>
               <span x-text="images[currentImageIndex].shutter_speed || 'Unknown'" class="font-mono"></span>
             </div>
             <div class="flex justify-between">
-              <span class="font-cinzel font-medium">ISO:</span>
+              <span class="font-medium">ISO:</span>
               <span x-text="images[currentImageIndex].iso || 'Unknown'" class="font-mono"></span>
             </div>
             <div class="flex justify-between">
-              <span class="font-cinzel font-medium">Focal:</span>
+              <span class="font-medium">Focal:</span>
               <span x-text="images[currentImageIndex].focal_length || 'Unknown'" class="font-mono"></span>
             </div>
             <div class="flex justify-between">
-              <span class="font-cinzel font-medium">Light:</span>
+              <span class="font-medium">Light:</span>
               <span x-text="images[currentImageIndex].light_source || 'Unknown'" class="font-mono"></span>
             </div>
             <div class="border-t border-gray-700 my-2"></div>
             <div class="flex justify-between">
-              <span class="font-cinzel font-medium">Date:</span>
+              <span class="font-medium">Date:</span>
               <span x-text="images[currentImageIndex].date_created || 'Unknown'" class="font-mono"></span>
             </div>
           </div>

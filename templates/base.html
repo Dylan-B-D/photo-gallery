@@ -6,10 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{% block title %}Photo Gallery{% endblock %}</title>
     <!-- Google Fonts -->
-    <link
-      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;700&family=Fira+Code:wght@400;500;700&display=swap"
-      rel="stylesheet"
-    />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Exo:ital,wght@0,100..900;1,100..900&family=Merienda:wght@300..900&family=Nunito:ital,wght@0,200..1000;1,200..1000&display=swap" rel="stylesheet">
     <link rel="icon" type="image/png" href="/static/favicon.png" />
     <link
       rel="stylesheet"
@@ -34,14 +33,14 @@
               background: "#09090b",
             },
             fontFamily: {
-              sans: ["Fira Code", "monospace"],
-              cinzel: ["Cinzel", "serif"],
+              sans: ["Nunito", "serif"],
+              merienda: ["Merienda", "serif"],
             },
             backdropBlur: {
               xs: '2px',
             },
             dropShadow: {
-              'emerald': '0 4px 6px rgba(16, 185, 129, 0.5)', // Customize the shadow as needed
+              'emerald': '0 4px 6px rgba(16, 185, 129, 0.5)',
             },
           },
         },
@@ -117,7 +116,7 @@
         <div class="flex justify-between h-16">
           <div class="flex-shrink-0 flex items-center">
             <h1
-              class="text-3xl font-bold text-white tracking-wider font-cinzel"
+              class="text-3xl font-bold text-white tracking-wider font-merienda"
             >
               {% block nav_title %}{% endblock %}
             </h1>

@@ -3,14 +3,20 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        primary: "#0f172a",
-        secondary: "#1e293b",
-        accent: "#334155",
-        background: "#0f0f0f",
+        primary: "#18181b",
+        secondary: "#27272a",
+        accent: "#3f3f46",
+        background: "#09090b",
       },
       fontFamily: {
-        sans: ["Fira Code", "monospace"],
-        cinzel: ["Cinzel", "serif"],
+        sans: ["Nunito", "serif"],
+        merienda: ["Merienda", "serif"],
+      },
+      backdropBlur: {
+        xs: '2px',
+      },
+      dropShadow: {
+        'emerald': '0 4px 6px rgba(16, 185, 129, 0.5)',
       },
     },
   },

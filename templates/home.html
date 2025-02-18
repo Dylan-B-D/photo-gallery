@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 
-{% block title %}Dylan's Photo Gallery - Home{% endblock %}
+{% block title %}Dylan's Photos - Home{% endblock %}
 
-{% block nav_title %}Dylan's <span class="text-emerald-400">Photo</span> Gallery{% endblock %}
+{% block nav_title %}Dylan's <span class="text-emerald-400">Photos</span>{% endblock %}
 
 {% block nav_items %}
 <a href="/login" class="text-gray-500 hover:text-gray-300 px-3 rounded-md text-sm font-medium">
@@ -84,70 +84,79 @@
     </div>
 
     <!-- Albums Grid -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pb-6">
         <template x-for="(album, index) in filteredAlbums" :key="index">
-            <a :href="'/albums/' + album[0].id" class="group block bg-gray-800 bg-opacity-10 rounded-lg overflow-hidden shadow-lg transition-all duration-300 hover:shadow-2xl hover:scale-105 relative">
-                <!-- Gradient Background -->
-                <div class="absolute inset-0 bg-gradient-to-r from-fuchsia-400 to-sky-400 opacity-20 blur-[100px]"></div>
-                
-                <!-- Album Thumbnail -->
-                <div class="relative h-48 bg-gray-900">
+            <a :href="'/albums/' + album[0].id" class="group block rounded-lg overflow-hidden shadow-lg transition-all duration-300 hover:shadow-2xl hover:scale-105 relative aspect-[4/3] w-full">
+                <!-- Main Image Container -->
+                <div class="absolute inset-0">
                     <!-- Skeleton Loader -->
                     <div x-show="!album[1]" class="w-full h-full flex items-center justify-center text-gray-500">
                         <div class="animate-pulse bg-gray-700 w-full h-full"></div>
                     </div>
-    
+        
                     <!-- Lazy Loaded Image -->
                     <template x-if="album[1]">
                         <img 
                             :src="'/uploads/' + album[0].id + '/thumbnail/' + album[1]"
                             :alt="album[0].name"
-                            class="w-full h-full object-cover"
+                            class="w-full h-full object-cover transition-opacity duration-300"
                             loading="lazy"
                         >
                     </template>
-    
-                    <!-- Image count badge -->
-                    <div class="absolute top-2 right-2 bg-black bg-opacity-50 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded-full">
-                        <i class="fas fa-images mr-1"></i>
-                        <span x-text="album[0].num_images"></span>
-                    </div>
-    
-                    <!-- Overlay on hover -->
-                    <div class="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                        <span class="text-white text-lg font-bold">View Album</span>
+        
+                    <!-- Dark Overlay -->
+                    <div class="absolute inset-0 bg-black opacity-0 transition-opacity duration-300 group-hover:opacity-50"></div>
+        
+                    <!-- View Album Text -->
+                    <div class="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                        <span class="text-white text-2xl font-bold">View Album</span>
                     </div>
                 </div>
-                
-                <!-- Album Info -->
-                <div class="p-4 bg-opacity-80 backdrop-blur-sm flex flex-col justify-between min-h-[150px]">
-                    <div>
-                        <div class="flex justify-between items-start mb-2">
-                            <h3 class="font-cinzel text-lg font-bold text-white" x-text="album[0].name"></h3>
-                            <span class="text-xs text-gray-400" x-text="album[0].date"></span>
+        
+                <!-- Content -->
+                <div class="relative h-full p-4 flex flex-col justify-between">
+                    <!-- Top Section -->
+                    <div class="flex justify-between items-start">
+                        <!-- Image count badge -->
+                        <div class="bg-black/50 backdrop-blur-sm px-2 py-1 rounded-full text-white text-xs">
+                            <i class="fas fa-images mr-1"></i>
+                            <span x-text="album[0].num_images"></span>
                         </div>
-                        
-                        <!-- Clamp the description to a max height -->
-                        <p class="text-gray-400 text-sm line-clamp-2 overflow-hidden" 
-                           x-text="album[0].description" x-show="album[0].description">
-                        </p>
+        
+                        <!-- Date -->
+                        <span class="bg-black/50 backdrop-blur-sm px-2 py-1 rounded-full text-white text-xs"
+                            x-text="new Date(album[0].date).getDate() + ['th', 'st', 'nd', 'rd'][(new Date(album[0].date).getDate() % 10 > 3 ? 0 : new Date(album[0].date).getDate() % 10)] + ' ' + 
+                                    new Date(album[0].date).toLocaleString('default', { month: 'short' }) + ' \'' + 
+                                    new Date(album[0].date).getFullYear().toString().slice(-2)">
+                        </span>
                     </div>
-    
-                    <div class="flex flex-wrap gap-2 text-xs text-gray-300 mt-auto">
-                        <span x-show="album[0].camera_model" class="bg-gray-700 bg-opacity-50 px-2 py-1 rounded-full">
-                            <i class="fas fa-camera mr-1"></i>
-                            <span x-text="album[0].camera_model"></span>
-                        </span>
-                        
-                        <span x-show="album[0].lens_model" class="bg-gray-700 bg-opacity-50 px-2 py-1 rounded-full">
-                            <i class="fas fa-circle mr-1"></i>
-                            <span x-text="album[0].lens_model.length > 15 ? album[0].lens_model.substring(0, 15) + '...' : album[0].lens_model"></span>
-                        </span>
-                        
-                        <span x-show="album[0].aperture" class="bg-gray-700 bg-opacity-50 px-2 py-1 rounded-full">
-                            <i class="fas fa-dot-circle mr-1"></i>
-                            <span x-text="album[0].aperture"></span>
-                        </span>
+        
+                    <!-- Bottom Section -->
+                    <div class="space-y-3">
+                        <div>
+                            <h3 class="font-merienda text-xl font-bold text-white drop-shadow-lg text-center" x-text="album[0].name" style="text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8), -2px -2px 4px rgba(0, 0, 0, 0.8), 2px -2px 4px rgba(0, 0, 0, 0.8), -2px 2px 4px rgba(0, 0, 0, 0.8);"></h3>
+                        </div>
+        
+                        <!-- Camera Info -->
+                        <div class="flex justify-between gap-2 text-xs text-white">
+                            <span x-show="album[0].camera_model" 
+                                class="bg-black/50 backdrop-blur-sm px-2 py-1 rounded-full">
+                                <i class="fas fa-camera mr-1"></i>
+                                <span x-text="album[0].camera_model"></span>
+                            </span>
+                            
+                            <span x-show="album[0].lens_model" 
+                                class="bg-black/50 backdrop-blur-sm px-2 py-1 rounded-full">
+                                <i class="fas fa-circle mr-1"></i>
+                                <span x-text="album[0].lens_model.length > 15 ? album[0].lens_model.substring(0, 15) + '...' : album[0].lens_model"></span>
+                            </span>
+                            
+                            <span x-show="album[0].aperture" 
+                                class="bg-black/50 backdrop-blur-sm px-2 py-1 rounded-full">
+                                <i class="fas fa-dot-circle mr-1"></i>
+                                <span x-text="album[0].aperture"></span>
+                            </span>
+                        </div>
                     </div>
                 </div>
             </a>
