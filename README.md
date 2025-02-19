@@ -1,6 +1,8 @@
 # Photo Gallery
 
-This is a photo gallery application built with Axum, Minijinja, HTMX, and Tailwind CSS. It includes features like authentication, rate limiting, and auto-reloading for development.
+This is a photo gallery web app built with Axum, Minijinja, HTMX, Alpine.js and Tailwind CSS. It has admin authentication and a admin panel to add, delete and edit albums with some storage stats. 
+
+Home page shows a list of album cards, and each album page contains a grid of the images. Images can also be viewed in slideshow mode which uses higher quality images.
 
 ## Table of Contents
 1. [Setting Up Environment Variables](#setting-up-environment-variables)
@@ -11,16 +13,17 @@ This is a photo gallery application built with Axum, Minijinja, HTMX, and Tailwi
 
 ## Setting Up Environment Variables
 
-Create a `.env` file in the root of your project with the following variables:
+Create a `.env` file in the root of the project with the following variables:
 
 ```bash
 # Database URL (SQLite)
 DATABASE_URL=sqlite:photo_gallery.db
 
 # JWT Secret (for authentication)
-JWT_SECRET=your_jwt_secret_here
+JWT_SECRET=jwt_secret
 
-# Admin credentials
+# Admin credentials (use src/bin/generate_password.rs to create an
+# encryped password, otherwise the password check will fail to match the hashes)
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=$argon2id$v=19$m=19456,t=2,p=1$salt$hash
 
@@ -29,10 +32,16 @@ AUTO_RELOAD_MODE=2
 
 # Application environment (development or production)
 APP_ENV=development
+
+# Host
+HOST=127.0.0.1
+
+# Port the app runs on
+PORT=8080
 ```
 
 **Notes:**
-* Replace `your_jwt_secret_here` with a secure secret key for JWT encoding
+* Replace `jwt_secret` with a secure secret key for JWT encoding
 * Replace `$argon2id$v=19$m=19456,t=2,p=1$salt$hash` with a hashed password generated using the `generate_password.rs` binary
 * Set `APP_ENV` to `production` when deploying the application
 
@@ -55,13 +64,13 @@ Enter your password: mysecurepassword
 Hashed password: $argon2id$v=19$m=19456,t=2,p=1$salt$hash
 ```
 
-4. **Update .env**: Replace the `ADMIN_PASSWORD` value in your `.env` file with the generated hash.
+4. **Update .env**: Replace the `ADMIN_PASSWORD` value in the `.env` file with the generated hash.
 
 ## Running the Application
 
 ### Development Mode
 
-1. Set `APP_ENV=development` in your `.env` file
+1. Set `APP_ENV=development` in the `.env` file
 2. Start the application:
 ```bash
 cargo run
@@ -70,7 +79,7 @@ cargo run
 
 ### Production Mode
 
-1. Set `APP_ENV=production` in your `.env` file
+1. Set `APP_ENV=production` in the `.env` file
 2. Build the application:
 ```bash
 cargo build --release
@@ -107,7 +116,7 @@ Create a `src/tailwind.css` file with the following content:
 npm run build
 ```
 
-5. **Serve the Compiled CSS**: Ensure the compiled CSS file (`static/css/tailwind.css`) is served by your application.
+5. **Serve the Compiled CSS**: Ensure the compiled CSS file (`static/css/tailwind.css`) is served by the application.
 
 ## Auto-Reloading in Development
 
@@ -125,3 +134,5 @@ The application uses Minijinja's auto-reloading feature in development mode. Thi
 
 * **Tailwind CSS Not Working in Production**: Ensure you've compiled Tailwind CSS and set `APP_ENV=production`
 * **Auto-Reloading Not Working**: Ensure `AUTO_RELOAD_MODE` is set to `2` and `APP_ENV=development`
+* **turbojpeg Fails to Build**: Ensure that you have CMake installed
+* **Database Errors**: Use `sqlx db create` and `sqlx migrate run` to create a database and run the migrations on it
