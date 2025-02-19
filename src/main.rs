@@ -13,6 +13,8 @@ use tower_governor::governor::GovernorConfigBuilder;
 use tower_governor::GovernorLayer;
 use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::services::ServeDir;
+use tower_http::compression::{CompressionLayer, CompressionLevel};
+
 
 mod auth;
 mod db;
@@ -69,6 +71,13 @@ async fn main() {
             delete(handlers::admin::delete_image_handler),
         )
         .route("/logout", get(logout_handler))
+        .layer(
+            CompressionLayer::new()
+                .gzip(true)
+                .br(true)
+                .deflate(true)
+                .quality(CompressionLevel::Default)
+        )
         .layer(CookieManagerLayer::new())
         .layer(GovernorLayer {
             config: governor_conf,

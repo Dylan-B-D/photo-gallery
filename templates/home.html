@@ -1,5 +1,14 @@
 {% extends "base.html" %} 
 
+{% block preload %}
+  {% if albums and albums|length > 0 %}
+    {% set first_album = albums[0] %}
+    {% if first_album[1] %}
+      <link rel="preload" href="/uploads/{{ first_album[0].id }}/thumbnail/{{ first_album[1] }}" as="image" fetchpriority="high" />
+    {% endif %}
+  {% endif %}
+{% endblock %}
+
 {% block title %}Dylan's Photos - Home{% endblock %}
 
 {% block nav_title %}Dylan's <span class="text-emerald-400">Photos</span>{% endblock %}
