@@ -17,7 +17,7 @@
     <!-- Secondary fonts loaded with lower priority -->
     <link href="https://fonts.googleapis.com/css2?family=Exo:wght@400;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
     
-    <link rel="icon" type="image/png" href="/static/favicon.png" />
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
 
     <!-- Defer non-critical JS -->
@@ -25,34 +25,36 @@
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     
     {% if app_env == "development" %}
-    <script src="https://cdn.tailwindcss.com" defer></script>
-    <script>
-      tailwind.config = {
-        darkMode: "class",
-        theme: {
-          extend: {
-            colors: {
-              primary: "#18181b",
-              secondary: "#27272a",
-              accent: "#3f3f46",
-              background: "#09090b",
-            },
-            fontFamily: {
-              sans: ["Nunito", "serif"],
-              merienda: ["Merienda", "serif"],
-            },
-            backdropBlur: {
-              xs: '2px',
-            },
-            dropShadow: {
-              'emerald': '0 4px 6px rgba(16, 185, 129, 0.5)',
-            },
-          },
-        },
-      };
-    </script>
+        <script src="https://cdn.tailwindcss.com" defer onload="configureTailwind()"></script>
+        <script>
+          function configureTailwind() {
+            tailwind.config = {
+              darkMode: "class",
+              theme: {
+                extend: {
+                  colors: {
+                    primary: "#18181b",
+                    secondary: "#27272a",
+                    accent: "#3f3f46",
+                    background: "#09090b",
+                  },
+                  fontFamily: {
+                    sans: ["Nunito", "serif"],
+                    merienda: ["Merienda", "serif"],
+                  },
+                  backdropBlur: {
+                    xs: '2px',
+                  },
+                  dropShadow: {
+                    'emerald': '0 4px 6px rgba(16, 185, 129, 0.5)',
+                  },
+                },
+              },
+            };
+          }
+        </script>
     {% else %}
-    <link rel="stylesheet" href="/static/css/tailwind.css" />
+        <link rel="stylesheet" href="/static/css/tailwind.css" />
     {% endif %}
     
     <style>
