@@ -36,7 +36,6 @@
                     primary: "#18181b",
                     secondary: "#27272a",
                     accent: "#3f3f46",
-                    background: "#09090b",
                   },
                   fontFamily: {
                     sans: ["Nunito", "serif"],
@@ -60,7 +59,7 @@
     <style>
       /* Critical CSS inlined */
       body {
-        background-color: #0f172a;
+        background-color: #090b09;
         position: relative;
         height: 100%;
         width: 100%;
@@ -70,16 +69,11 @@
         content: "";
         position: absolute;
         inset: 0;
-        background: linear-gradient(to right, #4f4f4f2e 1px, transparent 1px),
-          linear-gradient(to bottom, #4f4f4f2e 1px, transparent 1px);
-        background-size: 28px 48px;
-        mask-image: radial-gradient(
-          ellipse 60% 50% at 50% 0%,
-          #000 70%,
-          transparent 100%
-        );
+        background: url('/static/bg3.webp') no-repeat center center;
+        background-size: cover;
         background-attachment: fixed;
         z-index: -1;
+        filter: brightness(0.35);
       }
 
       .custom-scrollbar::-webkit-scrollbar {
