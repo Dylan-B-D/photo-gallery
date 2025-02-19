@@ -21,6 +21,7 @@
           <span>Home</span>
         </a>
       </div>
+
       <!-- Album Name/Description -->
       <div class="col-span-4 flex flex-col items-center text-center">
         <h1 class="text-3xl font-bold font-merienda text-white mb-1">{{ album.name }}</h1>
@@ -41,35 +42,59 @@
       </div>
     </div>
 
-    <!-- Date & Image Count -->
+    <!-- Date & Info Button -->
     <div class="flex justify-center gap-4 text-sm text-gray-400 mt-4">
-        <span>
-          <i class="fas fa-calendar mr-2"></i>
-          <span x-data x-init="$el.textContent = new Date('{{ album.date }}').toLocaleDateString('en-GB', {
-            day: 'numeric', 
-            month: 'long',
-            year: 'numeric'
-          }).replace(/(\d+)/, '$1' + 
-            (new Date('{{ album.date }}').getDate() % 10 == 1 && new Date('{{ album.date }}').getDate() != 11 ? 'st' : 
-            new Date('{{ album.date }}').getDate() % 10 == 2 && new Date('{{ album.date }}').getDate() != 12 ? 'nd' : 
-            new Date('{{ album.date }}').getDate() % 10 == 3 && new Date('{{ album.date }}').getDate() != 13 ? 'rd' : 'th'))"></span>
-        </span>
-        <span><i class="fas fa-images mr-2"></i>{{ album.num_images }} photos</span>
+      <span>
+        <i class="fas fa-calendar mr-2"></i>
+        <span x-data x-init="$el.textContent = new Date('{{ album.date }}').toLocaleDateString('en-GB', {
+          day: 'numeric', 
+          month: 'long',
+          year: 'numeric'
+        }).replace(/(\d+)/, '$1' + 
+          (new Date('{{ album.date }}').getDate() % 10 == 1 && new Date('{{ album.date }}').getDate() != 11 ? 'st' : 
+          new Date('{{ album.date }}').getDate() % 10 == 2 && new Date('{{ album.date }}').getDate() != 12 ? 'nd' : 
+          new Date('{{ album.date }}').getDate() % 10 == 3 && new Date('{{ album.date }}').getDate() != 13 ? 'rd' : 'th'))"></span>
+      </span>
+
+      <!-- Num of Images -->
+      <span>
+        <i class="fas fa-images mr-2"></i>
+        <span>{{ album.num_images }}</span>
+      </span>
+
+      <!-- Info Button -->
+      <div class="relative group">
+        <button class="text-gray-400 hover:text-white focus:outline-none">
+          <i class="fas fa-info-circle"></i>
+        </button>
+        <!-- Info Tooltip -->
+        <div class="absolute hidden group-hover:block bg-black/75 backdrop-blur-sm text-white text-xs rounded-lg p-3 mt-2 w-80 z-10">
+          {% if album.camera_model %}
+          <p><i class="fas fa-camera mr-2"></i>Camera Model: {{ album.camera_model }}</p>
+          {% endif %}
+          {% if album.lens_model %}
+          <p><i class="fas fa-camera-retro mr-2"></i>Lens Model: {{ album.lens_model }}</p>
+          {% endif %}
+          {% if album.aperture %}
+          <p><i class="fas fa-circle mr-2"></i>Aperture: {{ album.aperture }}</p>
+          {% endif %}
+        </div>
+      </div>
     </div>
 
     <!-- Navigation Buttons -->
     <div class="col-span-4 flex justify-center gap-4 mt-4">
       {% if next_album %}
       <a href="/albums/{{ next_album }}" class="drop-shadow-emerald bg-gray-100 bg-opacity-10 backdrop-blur-xs px-3 py-1 rounded-full text-sm text-white hover:bg-opacity-30 flex items-center gap-2">
-      <i class="fas fa-arrow-left"></i>
-      <span>Next Album</span>
+        <i class="fas fa-arrow-left"></i>
+        <span>Next Album</span>
       </a>
       {% endif %}
 
       {% if prev_album %}
       <a href="/albums/{{ prev_album }}" class="drop-shadow-emerald bg-gray-100 bg-opacity-10 backdrop-blur-xs px-3 py-1 rounded-full text-sm text-white hover:bg-opacity-30 flex items-center gap-2">
-      <span>Previous Album</span>
-      <i class="fas fa-arrow-right"></i>
+        <span>Previous Album</span>
+        <i class="fas fa-arrow-right"></i>
       </a>
       {% endif %}
     </div>
