@@ -37,18 +37,35 @@ pub async fn album_handler(
 }
 
 pub async fn get_adjacent_albums(pool: &SqlitePool, album_id: i64) -> (Option<i64>, Option<i64>) {
-    let prev_album = sqlx::query_scalar!(
-        "SELECT id FROM albums WHERE id < ? ORDER BY id DESC LIMIT 1",
+    // First get the current album's date
+    let current_album_date = sqlx::query_scalar!(
+        "SELECT date FROM albums WHERE id = ?",
         album_id
     )
     .fetch_optional(pool)
     .await
     .ok()
     .flatten();
+    
+    // If we can't get the date, return None for both
+    let Some(current_date) = current_album_date else {
+        return (None, None);
+    };
+    
+    // Get the previous album (closest older by date)
+    let prev_album = sqlx::query_scalar!(
+        "SELECT id FROM albums WHERE date < ? ORDER BY date DESC LIMIT 1",
+        current_date
+    )
+    .fetch_optional(pool)
+    .await
+    .ok()
+    .flatten();
 
+    // Get the next album (closest newer by date)
     let next_album = sqlx::query_scalar!(
-        "SELECT id FROM albums WHERE id > ? ORDER BY id ASC LIMIT 1",
-        album_id
+        "SELECT id FROM albums WHERE date > ? ORDER BY date ASC LIMIT 1",
+        current_date
     )
     .fetch_optional(pool)
     .await
