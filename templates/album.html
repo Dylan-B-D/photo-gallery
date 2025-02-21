@@ -42,45 +42,51 @@
       </div>
     </div>
 
-    <!-- Date & Info Button -->
+    <!-- Date, Photo num, and Info Button -->
     <div class="flex justify-center gap-4 text-sm text-gray-400 mt-4">
       <span>
-        <i class="fas fa-calendar mr-2"></i>
-        <span x-data x-init="$el.textContent = new Date('{{ album.date }}').toLocaleDateString('en-GB', {
-          day: 'numeric', 
-          month: 'long',
-          year: 'numeric'
-        }).replace(/(\d+)/, '$1' + 
-          (new Date('{{ album.date }}').getDate() % 10 == 1 && new Date('{{ album.date }}').getDate() != 11 ? 'st' : 
-          new Date('{{ album.date }}').getDate() % 10 == 2 && new Date('{{ album.date }}').getDate() != 12 ? 'nd' : 
-          new Date('{{ album.date }}').getDate() % 10 == 3 && new Date('{{ album.date }}').getDate() != 13 ? 'rd' : 'th'))"></span>
+          <i class="fas fa-calendar mr-2"></i>
+          <span x-data x-init="$el.textContent = new Date('{{ album.date }}').toLocaleDateString('en-GB', {
+              day: 'numeric', 
+              month: 'long',
+              year: 'numeric'
+          }).replace(/(\d+)/, '$1' + 
+              (new Date('{{ album.date }}').getDate() % 10 == 1 && new Date('{{ album.date }}').getDate() != 11 ? 'st' : 
+              new Date('{{ album.date }}').getDate() % 10 == 2 && new Date('{{ album.date }}').getDate() != 12 ? 'nd' : 
+              new Date('{{ album.date }}').getDate() % 10 == 3 && new Date('{{ album.date }}').getDate() != 13 ? 'rd' : 'th'))"></span>
       </span>
-
+  
       <!-- Num of Images -->
       <span>
-        <i class="fas fa-images mr-2"></i>
-        <span>{{ album.num_images }}</span>
+          <i class="fas fa-images mr-2"></i>
+          <span>{{ album.num_images }}</span>
       </span>
-
+  
       <!-- Info Button -->
-      <div class="relative group">
-        <button class="text-gray-400 hover:text-white focus:outline-none" aria-label="Info">
-          <i class="fas fa-info-circle"></i>
+      <div class="relative" x-data="{ showTooltip: false }">
+        <button 
+            @mouseenter="showTooltip = true" 
+            @mouseleave="showTooltip = false"
+            class="text-gray-400 hover:text-white focus:outline-none" 
+            aria-label="Info">
+            <i class="fas fa-info-circle"></i>
         </button>
         <!-- Info Tooltip -->
-        <div class="absolute hidden group-hover:block bg-black/75 backdrop-blur-sm text-white text-xs rounded-lg p-3 mt-2 w-80 z-10">
-          {% if album.camera_model %}
-          <p><i class="fas fa-camera mr-2"></i>Camera Model: {{ album.camera_model }}</p>
-          {% endif %}
-          {% if album.lens_model %}
-          <p><i class="fas fa-camera-retro mr-2"></i>Lens Model: {{ album.lens_model }}</p>
-          {% endif %}
-          {% if album.aperture %}
-          <p><i class="fas fa-circle mr-2"></i>Aperture: {{ album.aperture }}</p>
-          {% endif %}
+        <div 
+            x-show="showTooltip"
+            class="absolute bg-black/75 backdrop-blur-sm text-white text-xs rounded-lg p-3 mt-2 w-80 z-50 left-0">
+            {% if album.camera_model %}
+            <p><i class="fas fa-camera mr-2"></i>Camera Model: {{ album.camera_model }}</p>
+            {% endif %}
+            {% if album.lens_model %}
+            <p><i class="fas fa-camera-retro mr-2"></i>Lens Model: {{ album.lens_model }}</p>
+            {% endif %}
+            {% if album.aperture %}
+            <p><i class="fas fa-circle mr-2"></i>Aperture: {{ album.aperture }}</p>
+            {% endif %}
         </div>
-      </div>
     </div>
+  </div>
 
     <!-- Navigation Buttons -->
     <div class="col-span-4 flex justify-center gap-4 mt-4">

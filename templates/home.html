@@ -157,19 +157,19 @@
                             <span x-show="album[0].camera_model" 
                                 class="bg-black/50 backdrop-blur-sm px-2 py-1 rounded-full truncate">
                                 <i class="fas fa-camera mr-1"></i>
-                                <span x-text="album[0].camera_model"></span>
+                                <span x-text="album[0].camera_model?.length > 15 ? album[0].camera_model.substring(0, 15) + '...' : album[0].camera_model"></span>
                             </span>
                             
                             <span x-show="album[0].lens_model" 
                                 class="bg-black/50 backdrop-blur-sm px-2 py-1 rounded-full truncate">
                                 <i class="fas fa-circle mr-1"></i>
-                                <span x-text="album[0].lens_model"></span>
+                                <span x-text="album[0].lens_model?.length > 20 ? album[0].lens_model.substring(0, 20) + '...' : album[0].lens_model"></span>
                             </span>
                             
                             <span x-show="album[0].aperture" 
                                 class="bg-black/50 backdrop-blur-sm px-2 py-1 rounded-full">
                                 <i class="fas fa-dot-circle mr-1"></i>
-                                <span x-text="album[0].aperture"></span>
+                                <span x-text="album[0].aperture?.length > 15 ? album[0].aperture.substring(0, 15) + '...' : album[0].aperture"></span>
                             </span>
                         </div>
                     </div>
