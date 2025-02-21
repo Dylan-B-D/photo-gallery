@@ -74,15 +74,24 @@
         <!-- Info Tooltip -->
         <div 
             x-show="showTooltip"
-            class="absolute bg-black/75 backdrop-blur-sm text-white text-xs rounded-lg p-3 mt-2 w-80 z-50 left-0">
+            class="absolute bg-black/75 backdrop-blur-sm text-white text-xs rounded-lg p-3 mt-2 w-72 md:w-96 z-50 right-0 md:right-auto md:left-1/2 md:-translate-x-1/2">
             {% if album.camera_model %}
-            <p><i class="fas fa-camera mr-2"></i>Camera Model: {{ album.camera_model }}</p>
+            <div class="flex items-start mb-1">
+                <i class="fas fa-camera mr-2 mt-1 flex-shrink-0"></i>
+                <span>Camera Model: {{ album.camera_model }}</span>
+            </div>
             {% endif %}
             {% if album.lens_model %}
-            <p><i class="fas fa-camera-retro mr-2"></i>Lens Model: {{ album.lens_model }}</p>
+            <div class="flex items-start mb-1">
+                <i class="fas fa-camera-retro mr-2 mt-1 flex-shrink-0"></i>
+                <span>Lens Model: {{ album.lens_model }}</span>
+            </div>
             {% endif %}
             {% if album.aperture %}
-            <p><i class="fas fa-circle mr-2"></i>Aperture: {{ album.aperture }}</p>
+            <div class="flex items-start mb-1">
+                <i class="fas fa-circle mr-2 mt-1 flex-shrink-0"></i>
+                <span>Aperture: {{ album.aperture }}</span>
+            </div>
             {% endif %}
         </div>
     </div>
