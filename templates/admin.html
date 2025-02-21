@@ -770,7 +770,13 @@
           <div class="flex items-center justify-between">
             <div>
               <p class="text-gray-400 text-sm">Storage Used</p>
-              <p class="text-3xl font-bold text-white mt-2">{{ total_storage }} MB</p>
+              <p class="text-3xl font-bold text-white mt-2">
+                {% if total_storage >= 1024 %}
+                  {{ (total_storage / 1024) | round(2) }} GB
+                {% else %}
+                  {{ total_storage | round(2) }} MB
+                {% endif %}
+              </p>
             </div>
             <i class="fas fa-database text-2xl text-green-400"></i>
           </div>
