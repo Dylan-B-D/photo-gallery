@@ -1,15 +1,24 @@
 # Photo Gallery
 
-This is a photo gallery web app built with Axum, Minijinja, HTMX, Alpine.js and Tailwind CSS. It has admin authentication and a admin panel to add, delete and edit albums with some storage stats. 
+Personal photo gallery web app built with Rust, HTMX, Alpine.js and Tailwind CSS. It has admin authentication and a admin panel to add, delete and edit albums with some storage stats. It currently has my name harded on a few pages, but should be easy to change.
 
 Home page shows a list of album cards, and each album page contains a grid of the images. Images can also be viewed in slideshow mode which uses higher quality images.
 
+![Home Page Screenshot](./images/home.png)
+![Album Page Screenshot](./images/album.png)
+
 ## Table of Contents
-1. [Setting Up Environment Variables](#setting-up-environment-variables)
-2. [Generating a Hashed Password](#generating-a-hashed-password)
-3. [Running the Application](#running-the-application)
-4. [Tailwind CSS Setup](#tailwind-css-setup)
-5. [Auto-Reloading in Development](#auto-reloading-in-development)
+1. [Current Limitations](#current-limitations)
+2. [Setting Up Environment Variables](#setting-up-environment-variables)
+3. [Generating a Hashed Password](#generating-a-hashed-password)
+4. [Running the Application](#running-the-application)
+5. [Tailwind CSS Setup](#tailwind-css-setup)
+6. [Auto-Reloading in Development](#auto-reloading-in-development)
+
+# Current Limitations
+- Uploading through the admin panel is slow, although the image processing is very fast.
+- Uploading too many images at once can cause a timeout (more > 100 images).
+- One or two things could be made more mobile friendly.
 
 ## Setting Up Environment Variables
 
