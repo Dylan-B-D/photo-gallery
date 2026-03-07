@@ -26,6 +26,18 @@
     search: '',
     sort: 'date-desc',
     albums: JSON.parse($el.dataset.albums),
+    init() {
+      try {
+        const saved = localStorage.getItem('pg_album_sort');
+        if (saved) this.sort = saved;
+      } catch (e) {}
+
+      this.$watch('sort', (value) => {
+        try {
+          localStorage.setItem('pg_album_sort', value);
+        } catch (e) {}
+      });
+    },
     options: [
       { value: 'date-desc', text: 'Newest First' },
       { value: 'date-asc', text: 'Oldest First' },
@@ -73,42 +85,55 @@
         });
     }
   }"
+  x-init="init()"
   data-albums='{{ albums_json | safe }}'
 >  <div class="relative z-20 rounded-lg border border-white/10 bg-white/5 shadow-lg shadow-black/30 backdrop-blur-xs">
     <div class="relative z-30 border-b border-white/10 p-4 sm:p-5">
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div class="relative flex-1 rounded-md border border-white/10 bg-zinc-900/25 focus-within:ring-2 focus-within:ring-[#34D399]">
-          <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
-          <input
-            type="text"
-            placeholder="Search albums..."
-            class="h-11 w-full bg-transparent py-2 pl-11 pr-11 text-sm text-white placeholder:text-gray-400 outline-none"
-            x-model="search"
-          />
-          <button
-            type="button"
-            class="absolute right-2 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-gray-300 hover:text-white"
-            x-show="search.length > 0"
-            @click="search = ''"
-          >
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
+      <div class="flex">
+        <div class="relative w-full" x-data="{ open: false, searchFocus: false }" @keydown.escape.window="open = false">
+          <div class="flex h-11 w-full overflow-hidden rounded-md border border-white/10 bg-zinc-900/25">
+            <div
+              class="relative z-10 flex-1 rounded-l-md"
+              @focusin="searchFocus = true"
+              @focusout="searchFocus = false"
+              :style="searchFocus ? 'outline: 2px solid #34D399; outline-offset: -2px;' : ''"
+            >
+              <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+              <input
+                type="text"
+                placeholder="Search albums..."
+                class="h-11 w-full bg-transparent py-2 pl-11 pr-11 text-sm text-white placeholder:text-gray-400 outline-none"
+                x-model="search"
+              />
+              <button
+                type="button"
+                class="absolute right-2 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-gray-300 hover:text-white focus:outline-none"
+                x-show="search.length > 0"
+                @click="search = ''"
+                aria-label="Clear search"
+              >
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
 
-        <div class="relative sm:w-64" x-data="{ open: false }" @keydown.escape.window="open = false">
-          <button
-            type="button"
-            class="flex h-11 w-full items-center justify-between gap-3 rounded-md border border-white/10 bg-zinc-900/25 px-4 text-left text-sm text-white outline-none hover:bg-white/5 focus:ring-2 focus:ring-[#34D399]"
-            @click="open = !open"
-            :aria-expanded="open.toString()"
-            aria-haspopup="listbox"
-          >
-            <span class="truncate" x-text="options.find(o => o.value === sort)?.text"></span>
-            <i class="fas fa-chevron-down text-gray-400 transition-transform duration-200" :class="open ? 'rotate-180' : ''"></i>
-          </button>
+            <div class="relative z-0 w-px self-stretch bg-white/15"></div>
+
+            <div class="shrink-0 bg-black/10">
+              <button
+                type="button"
+                class="flex h-11 w-44 items-center justify-between gap-3 px-4 text-left text-sm text-white/90 outline-none hover:bg-white/5 focus:outline-none focus-visible:bg-white/5 sm:w-64"
+                @click="open = !open"
+                :aria-expanded="open.toString()"
+                aria-haspopup="listbox"
+              >
+                <span class="truncate" x-text="options.find(o => o.value === sort)?.text"></span>
+                <i class="fas fa-chevron-down text-gray-400 transition-transform duration-200" :class="open ? 'rotate-180' : ''"></i>
+              </button>
+            </div>
+          </div>
 
           <div
-            class="absolute right-0 top-full z-50 mt-2 w-full overflow-hidden rounded-md border border-emerald-400/20 bg-zinc-950/95 backdrop-blur-xs shadow-2xl"
+            class="absolute right-0 top-full z-50 mt-2 w-44 overflow-hidden rounded-md border border-emerald-400/20 bg-zinc-950/95 backdrop-blur-xs shadow-2xl sm:w-64"
             x-show="open"
             x-transition.opacity
             @click.away="open = false"
@@ -117,7 +142,7 @@
             <template x-for="option in options" :key="option.value">
               <button
                 type="button"
-                class="flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm text-gray-100 hover:bg-emerald-500/10"
+                class="flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm text-gray-100 hover:bg-emerald-500/10 focus:outline-none"
                 :class="sort === option.value ? 'bg-emerald-500/15 text-emerald-100' : ''"
                 @click="sort = option.value; open = false"
                 role="option"

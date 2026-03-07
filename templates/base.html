@@ -130,6 +130,48 @@
         background-size: 1000px 100%;
         animation: shimmer 2s infinite linear;
       }
+
+      input:-webkit-autofill,
+      input:-webkit-autofill:hover,
+      input:-webkit-autofill:focus,
+      textarea:-webkit-autofill,
+      textarea:-webkit-autofill:hover,
+      textarea:-webkit-autofill:focus,
+      select:-webkit-autofill,
+      select:-webkit-autofill:hover,
+      select:-webkit-autofill:focus {
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+        caret-color: #ffffff !important;
+        -webkit-box-shadow: 0 0 0 1000px rgb(24 24 27) inset !important;
+        box-shadow: 0 0 0 1000px rgb(24 24 27) inset !important;
+        border-color: rgba(255, 255, 255, 0.1) !important;
+        transition: background-color 9999s ease-out 0s;
+      }
+
+      input:autofill,
+      textarea:autofill,
+      select:autofill {
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+        caret-color: #ffffff !important;
+        box-shadow: 0 0 0 1000px rgb(24 24 27) inset !important;
+      }
+
+      input:-moz-autofill,
+      textarea:-moz-autofill,
+      select:-moz-autofill {
+        color: #ffffff !important;
+        box-shadow: 0 0 0 1000px rgb(24 24 27) inset !important;
+        caret-color: #ffffff !important;
+      }
+
+      button:focus:not(:focus-visible),
+      a:focus:not(:focus-visible),
+      [role="button"]:focus:not(:focus-visible) {
+        outline: none;
+        box-shadow: none !important;
+      }
     </style>
     {% block head %}{% endblock %}
     {% block preload %}{% endblock %}
