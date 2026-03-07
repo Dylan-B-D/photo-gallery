@@ -389,7 +389,7 @@
             class="flex h-full flex-col gap-5"
             enctype="multipart/form-data"
           >
-            <div class="flex-1 space-y-5 overflow-y-auto pr-1">
+            <div class="pretty-scroll flex-1 space-y-5 overflow-y-auto pr-1">
               <div class="flex flex-col gap-4 sm:flex-row">
                 <div class="w-full sm:w-2/3">
                   <label class="block text-sm font-semibold text-gray-200/80">Album Name</label>
@@ -436,41 +436,43 @@
                 />
               </div>
 
-              <div class="max-h-[46vh] overflow-y-auto rounded-lg border border-white/10 bg-black/40 p-4">
+              <div class="rounded-lg border border-white/10 bg-black/40 p-4">
                 <div class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
                   <template x-if="loadingImages">
                     <template x-for="i in 4" :key="i">
                       <div class="animate-pulse">
-                        <div class="h-32 rounded-lg bg-zinc-900"></div>
+                        <div class="aspect-[4/3] rounded-lg bg-zinc-900"></div>
                         <div class="mt-2 h-4 w-3/4 rounded bg-zinc-900"></div>
                       </div>
                     </template>
                   </template>
 
                   <template x-for="img in images" :key="img.id">
-                    <div class="group relative">
-                      <img
-                        :src="img.thumbnail"
-                        :alt="img.name"
-                        class="h-32 w-full rounded-lg object-cover"
-                        loading="lazy"
-                      />
-                      <button
-                        type="button"
-                        @click.stop="coverImageId = img.id"
-                        class="absolute left-2 top-2 z-10 inline-flex items-center gap-1 rounded-full border border-white/10 px-2 py-1 text-xs font-semibold backdrop-blur-sm transition focus:outline-none focus:ring-2 focus:ring-[#34D399]"
-                        :class="coverImageId === img.id ? 'bg-emerald-500/30 text-white' : 'bg-black/30 text-white/70 hover:bg-black/50'"
-                      >
-                        <i class="fas fa-thumbtack text-[10px]" :class="coverImageId === img.id ? 'text-emerald-300' : 'text-white/70'"></i>
-                        <span x-show="coverImageId === img.id">Cover</span>
-                      </button>
-                      <button
-                        @click="removeImage(img.id)"
-                        type="button"
-                        class="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-black/50 text-white opacity-0 backdrop-blur-sm transition-opacity hover:bg-red-500/60 group-hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-[#34D399]"
-                      >
-                        <i class="fas fa-times text-xs"></i>
-                      </button>
+                    <div class="group">
+                      <div class="relative aspect-[4/3] overflow-hidden rounded-lg">
+                        <img
+                          :src="img.thumbnail"
+                          :alt="img.name"
+                          class="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                        <button
+                          type="button"
+                          @click.stop="coverImageId = img.id"
+                          class="absolute left-2 top-2 z-10 inline-flex items-center gap-1 rounded-full border border-white/10 px-2 py-1 text-xs font-semibold backdrop-blur-sm transition focus:outline-none focus:ring-2 focus:ring-[#34D399]"
+                          :class="coverImageId === img.id ? 'bg-emerald-500/30 text-white' : 'bg-black/30 text-white/70 hover:bg-black/50'"
+                        >
+                          <i class="fas fa-thumbtack text-[10px]" :class="coverImageId === img.id ? 'text-emerald-300' : 'text-white/70'"></i>
+                          <span x-show="coverImageId === img.id">Cover</span>
+                        </button>
+                        <button
+                          @click="removeImage(img.id)"
+                          type="button"
+                          class="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-black/50 text-white opacity-0 backdrop-blur-sm transition-opacity hover:bg-red-500/60 group-hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-[#34D399]"
+                        >
+                          <i class="fas fa-times text-xs"></i>
+                        </button>
+                      </div>
                       <div class="mt-1 text-xs text-gray-200/60">
                         <span x-text="img.name"></span>
                         <span class="text-gray-200/40">•</span>
@@ -864,7 +866,7 @@
             class="flex h-full flex-col gap-5"
             enctype="multipart/form-data"
           >
-            <div class="flex-1 space-y-5 overflow-y-auto pr-1">
+            <div class="pretty-scroll flex-1 space-y-5 overflow-y-auto pr-1">
               <div class="flex flex-col gap-4 sm:flex-row">
                 <div class="w-full sm:w-2/3">
                   <label class="block text-sm font-semibold text-gray-200/80">Album Name</label>
@@ -911,41 +913,43 @@
                 />
               </div>
 
-              <div class="max-h-[46vh] overflow-y-auto rounded-lg border border-white/10 bg-black/40 p-4">
+              <div class="rounded-lg border border-white/10 bg-black/40 p-4">
                 <div class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
                   <template x-if="loadingImages">
                     <template x-for="i in 4" :key="i">
                       <div class="animate-pulse">
-                        <div class="h-32 rounded-lg bg-zinc-900"></div>
+                        <div class="aspect-[4/3] rounded-lg bg-zinc-900"></div>
                         <div class="mt-2 h-4 w-3/4 rounded bg-zinc-900"></div>
                       </div>
                     </template>
                   </template>
 
                   <template x-for="img in existingImages" :key="img.id">
-                    <div class="group relative">
-                      <img
-                        :src="img.thumbnail"
-                        :alt="img.name"
-                        class="h-32 w-full rounded-lg object-cover"
-                        loading="lazy"
-                      />
-                      <button
-                        @click.stop="coverImageId = img.id"
-                        type="button"
-                        class="absolute left-2 top-2 z-10 inline-flex items-center gap-1 rounded-full border border-white/10 px-2 py-1 text-xs font-semibold backdrop-blur-sm transition focus:outline-none focus:ring-2 focus:ring-[#34D399]"
-                        :class="coverImageId === img.id ? 'bg-emerald-500/30 text-white' : 'bg-black/30 text-white/70 hover:bg-black/50'"
-                      >
-                        <i class="fas fa-thumbtack text-[10px]" :class="coverImageId === img.id ? 'text-emerald-300' : 'text-white/70'"></i>
-                        <span x-show="coverImageId === img.id">Cover</span>
-                      </button>
-                      <button
-                        @click="removeImage(img.id)"
-                        type="button"
-                        class="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-black/50 text-white opacity-0 backdrop-blur-sm transition-opacity hover:bg-red-500/60 group-hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-[#34D399]"
-                      >
-                        <i class="fas fa-times text-xs"></i>
-                      </button>
+                    <div class="group">
+                      <div class="relative aspect-[4/3] overflow-hidden rounded-lg">
+                        <img
+                          :src="img.thumbnail"
+                          :alt="img.name"
+                          class="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                        <button
+                          @click.stop="coverImageId = img.id"
+                          type="button"
+                          class="absolute left-2 top-2 z-10 inline-flex items-center gap-1 rounded-full border border-white/10 px-2 py-1 text-xs font-semibold backdrop-blur-sm transition focus:outline-none focus:ring-2 focus:ring-[#34D399]"
+                          :class="coverImageId === img.id ? 'bg-emerald-500/30 text-white' : 'bg-black/30 text-white/70 hover:bg-black/50'"
+                        >
+                          <i class="fas fa-thumbtack text-[10px]" :class="coverImageId === img.id ? 'text-emerald-300' : 'text-white/70'"></i>
+                          <span x-show="coverImageId === img.id">Cover</span>
+                        </button>
+                        <button
+                          @click="removeImage(img.id)"
+                          type="button"
+                          class="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-black/50 text-white opacity-0 backdrop-blur-sm transition-opacity hover:bg-red-500/60 group-hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-[#34D399]"
+                        >
+                          <i class="fas fa-times text-xs"></i>
+                        </button>
+                      </div>
                       <div class="mt-1 text-xs text-gray-200/60">
                         <span x-text="img.name"></span>
                         <span class="text-gray-200/40">•</span>
@@ -955,29 +959,31 @@
                   </template>
 
                   <template x-for="img in images" :key="img.id">
-                    <div class="group relative">
-                      <img
-                        :src="img.thumbnail"
-                        :alt="img.name"
-                        class="h-32 w-full rounded-lg object-cover"
-                        loading="lazy"
-                      />
-                      <button
-                        @click.stop="coverImageId = img.id"
-                        type="button"
-                        class="absolute left-2 top-2 z-10 inline-flex items-center gap-1 rounded-full border border-white/10 px-2 py-1 text-xs font-semibold backdrop-blur-sm transition focus:outline-none focus:ring-2 focus:ring-[#34D399]"
-                        :class="coverImageId === img.id ? 'bg-emerald-500/30 text-white' : 'bg-black/30 text-white/70 hover:bg-black/50'"
-                      >
-                        <i class="fas fa-thumbtack text-[10px]" :class="coverImageId === img.id ? 'text-emerald-300' : 'text-white/70'"></i>
-                        <span x-show="coverImageId === img.id">Cover</span>
-                      </button>
-                      <button
-                        @click="removeImage(img.id)"
-                        type="button"
-                        class="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-black/50 text-white opacity-0 backdrop-blur-sm transition-opacity hover:bg-red-500/60 group-hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-[#34D399]"
-                      >
-                        <i class="fas fa-times text-xs"></i>
-                      </button>
+                    <div class="group">
+                      <div class="relative aspect-[4/3] overflow-hidden rounded-lg">
+                        <img
+                          :src="img.thumbnail"
+                          :alt="img.name"
+                          class="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                        <button
+                          @click.stop="coverImageId = img.id"
+                          type="button"
+                          class="absolute left-2 top-2 z-10 inline-flex items-center gap-1 rounded-full border border-white/10 px-2 py-1 text-xs font-semibold backdrop-blur-sm transition focus:outline-none focus:ring-2 focus:ring-[#34D399]"
+                          :class="coverImageId === img.id ? 'bg-emerald-500/30 text-white' : 'bg-black/30 text-white/70 hover:bg-black/50'"
+                        >
+                          <i class="fas fa-thumbtack text-[10px]" :class="coverImageId === img.id ? 'text-emerald-300' : 'text-white/70'"></i>
+                          <span x-show="coverImageId === img.id">Cover</span>
+                        </button>
+                        <button
+                          @click="removeImage(img.id)"
+                          type="button"
+                          class="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-black/50 text-white opacity-0 backdrop-blur-sm transition-opacity hover:bg-red-500/60 group-hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-[#34D399]"
+                        >
+                          <i class="fas fa-times text-xs"></i>
+                        </button>
+                      </div>
                       <div class="mt-1 text-xs text-gray-200/60">
                         <span x-text="img.name"></span>
                         <span class="text-gray-200/40">•</span>
@@ -1005,6 +1011,30 @@
       </div>
     </div>
   </template>
+
+  <style>
+    .pretty-scroll {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.22) rgba(255, 255, 255, 0.04);
+    }
+    .pretty-scroll::-webkit-scrollbar {
+      width: 10px;
+    }
+    .pretty-scroll::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 9999px;
+    }
+    .pretty-scroll::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.18);
+      border-radius: 9999px;
+      border: 2px solid rgba(0, 0, 0, 0);
+      background-clip: padding-box;
+    }
+    .pretty-scroll::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.26);
+      background-clip: padding-box;
+    }
+  </style>
 
 
   {# Main content #}

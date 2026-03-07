@@ -156,7 +156,14 @@
       @keydown.window.arrow-right="currentImageIndex < images.length - 1 ? currentImageIndex++ : null"
       @keydown.window.space="slideshowPaused ? resumeSlideshow() : pauseSlideshow()"
       >
-      <div class="relative w-full h-full flex items-center justify-center">
+      <div
+        class="relative flex h-full w-full items-center justify-center overflow-hidden"
+        x-ref="lightboxViewport"
+        @wheel.prevent="onLightboxWheel($event)"
+        @pointermove.window="onLightboxPointerMove($event)"
+        @pointerup.window="endLightboxPan()"
+        @pointercancel.window="endLightboxPan()"
+      >
         <!-- Main Image (fills viewport) with crossfade -->
         <img 
           :src="'/uploads/{{ album.id }}/optimized/' + images[currentImageIndex].filename"
@@ -165,8 +172,12 @@
           x-transition:enter="transition-opacity duration-700"
           x-transition:enter-start="opacity-0"
           x-transition:enter-end="opacity-100"
-          class="max-h-screen max-w-screen object-contain"
-          @click.stop
+          :class="isSlideshow ? 'cursor-default' : (lightboxZoom > 1 ? 'cursor-zoom-out' : 'cursor-zoom-in')"
+          :style="lightboxImageStyle()"
+          class="max-h-screen max-w-screen object-contain select-none will-change-transform"
+          draggable="false"
+          @click.stop="toggleLightboxZoom()"
+          @pointerdown="startLightboxPan($event)"
         >
         <!-- Preload Next/Previous Images (hidden) -->
         <template x-if="currentImageIndex < images.length - 1">
@@ -225,6 +236,38 @@
             >
               <i class="fas fa-chevron-right"></i>
             </button>
+        </div>
+
+        <div
+          class="fixed bottom-8 left-4 z-50"
+          x-show="showControlsOverlay && !isSlideshow"
+          x-transition.opacity.duration.150ms
+        >
+          <div class="flex items-center gap-1 rounded-md border border-white/10 bg-black/40 p-1 backdrop-blur-md">
+            <button
+              @click.stop="zoomOutLightbox()"
+              class="inline-flex h-9 w-9 items-center justify-center rounded-md text-white/90 hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#34D399]"
+              type="button"
+              aria-label="Zoom out"
+            >
+              <i class="fas fa-minus"></i>
+            </button>
+            <button
+              @click.stop="resetLightboxZoom()"
+              class="inline-flex h-9 items-center justify-center rounded-md px-3 text-xs font-semibold text-white/90 hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#34D399]"
+              type="button"
+            >
+              <span x-text="Math.round(lightboxZoom * 100) + '%'"></span>
+            </button>
+            <button
+              @click.stop="zoomInLightbox()"
+              class="inline-flex h-9 w-9 items-center justify-center rounded-md text-white/90 hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#34D399]"
+              type="button"
+              aria-label="Zoom in"
+            >
+              <i class="fas fa-plus"></i>
+            </button>
+          </div>
         </div>
 
         <!-- Metadata Panel -->
@@ -372,6 +415,16 @@
         showControlsOverlay: true,
         controlTimeout: null,
         isFullscreen: false,
+        lightboxZoom: 1,
+        lightboxPanX: 0,
+        lightboxPanY: 0,
+        lightboxIsPanning: false,
+        lightboxPanStartX: 0,
+        lightboxPanStartY: 0,
+        lightboxPanBaseX: 0,
+        lightboxPanBaseY: 0,
+        lightboxPanMoved: false,
+        lightboxMaxZoom: 4,
 
         init() {
           try {
@@ -395,6 +448,7 @@
           });
 
           this.$watch("currentImageIndex", () => {
+            this.resetLightboxZoom();
             if (!this.showMetadata) return;
             this.renderHistogram();
           });
@@ -404,6 +458,8 @@
         openLightbox(index) {
           this.currentImageIndex = index;
           this.selectedImage = this.images[index].filename;
+          this.isSlideshow = false;
+          this.resetLightboxZoom();
           document.body.classList.add('overflow-hidden');
         },
 
@@ -413,6 +469,7 @@
           this.currentImageIndex = 0;
           this.selectedImage = this.images[0].filename;
           this.isSlideshow = true;
+          this.resetLightboxZoom();
           this.isFullscreen = true;
           document.body.classList.add('overflow-hidden');
           this.enterFullscreen();
@@ -457,12 +514,127 @@
           this.isSlideshow = false;
           this.slideshowPaused = false;
           this.selectedImage = null;
+          this.resetLightboxZoom();
           document.body.classList.remove('overflow-hidden');
           this.exitFullscreen();
           this.isFullscreen = false;
           this.showMetadata = false;
           this.histogramStatus = "idle";
           this.histogramError = "";
+        },
+
+        lightboxImageStyle() {
+          return `transform: translate3d(${this.lightboxPanX}px, ${this.lightboxPanY}px, 0) scale(${this.lightboxZoom});`;
+        },
+
+        resetLightboxZoom() {
+          this.lightboxZoom = 1;
+          this.lightboxPanX = 0;
+          this.lightboxPanY = 0;
+          this.lightboxIsPanning = false;
+          this.lightboxPanMoved = false;
+        },
+
+        clampLightboxPan() {
+          if (this.lightboxZoom <= 1) {
+            this.lightboxPanX = 0;
+            this.lightboxPanY = 0;
+            return;
+          }
+
+          const viewport = this.$refs.lightboxViewport;
+          if (!viewport) return;
+
+          const rect = viewport.getBoundingClientRect();
+          const maxX = ((this.lightboxZoom - 1) * rect.width) / 2;
+          const maxY = ((this.lightboxZoom - 1) * rect.height) / 2;
+
+          this.lightboxPanX = Math.max(-maxX, Math.min(maxX, this.lightboxPanX));
+          this.lightboxPanY = Math.max(-maxY, Math.min(maxY, this.lightboxPanY));
+        },
+
+        setLightboxZoom(nextZoom) {
+          if (this.isSlideshow) return;
+
+          const z = Math.max(1, Math.min(this.lightboxMaxZoom, nextZoom));
+          this.lightboxZoom = z;
+          if (this.lightboxZoom === 1) {
+            this.lightboxPanX = 0;
+            this.lightboxPanY = 0;
+          } else {
+            this.clampLightboxPan();
+          }
+        },
+
+        zoomInLightbox() {
+          this.setLightboxZoom(this.lightboxZoom * 1.25);
+        },
+
+        zoomOutLightbox() {
+          const next = this.lightboxZoom / 1.25;
+          if (next <= 1.02) {
+            this.resetLightboxZoom();
+            return;
+          }
+          this.setLightboxZoom(next);
+        },
+
+        toggleLightboxZoom() {
+          if (this.isSlideshow) return;
+          if (this.lightboxIsPanning || this.lightboxPanMoved) return;
+          if (this.lightboxZoom <= 1) {
+            this.setLightboxZoom(2);
+          } else {
+            this.resetLightboxZoom();
+          }
+        },
+
+        onLightboxWheel(event) {
+          if (this.isSlideshow) return;
+          this.showControls();
+          if (event.deltaY < 0) {
+            this.zoomInLightbox();
+          } else if (event.deltaY > 0) {
+            this.zoomOutLightbox();
+          }
+        },
+
+        startLightboxPan(event) {
+          if (this.isSlideshow) return;
+          if (this.lightboxZoom <= 1) return;
+
+          this.lightboxIsPanning = true;
+          this.lightboxPanMoved = false;
+          this.lightboxPanStartX = event.clientX;
+          this.lightboxPanStartY = event.clientY;
+          this.lightboxPanBaseX = this.lightboxPanX;
+          this.lightboxPanBaseY = this.lightboxPanY;
+          this.showControls();
+        },
+
+        onLightboxPointerMove(event) {
+          if (!this.lightboxIsPanning) return;
+
+          const dx = event.clientX - this.lightboxPanStartX;
+          const dy = event.clientY - this.lightboxPanStartY;
+
+          if (!this.lightboxPanMoved && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) {
+            this.lightboxPanMoved = true;
+          }
+
+          this.lightboxPanX = this.lightboxPanBaseX + dx;
+          this.lightboxPanY = this.lightboxPanBaseY + dy;
+          this.clampLightboxPan();
+        },
+
+        endLightboxPan() {
+          if (!this.lightboxIsPanning) return;
+          this.lightboxIsPanning = false;
+          if (this.lightboxPanMoved) {
+            setTimeout(() => {
+              this.lightboxPanMoved = false;
+            }, 0);
+          }
         },
 
         toggleMetadata() {
