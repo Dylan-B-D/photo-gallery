@@ -2,6 +2,9 @@ module.exports = {
   content: ["./templates/**/*.html"],
   theme: {
     extend: {
+      screens: {
+        "3xl": "2000px",
+      },
       colors: {
         primary: "#18181b",
         secondary: "#27272a",
@@ -10,7 +13,7 @@ module.exports = {
       },
       fontFamily: {
         sans: ["Nunito", "serif"],
-        merienda: ["Merienda", "serif"],
+        merienda: ["Cinzel", "serif"],
       },
       backdropBlur: {
         xs: '2px',

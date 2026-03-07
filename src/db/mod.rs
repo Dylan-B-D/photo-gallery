@@ -20,20 +20,24 @@ pub async fn create_album(
     Ok(result.last_insert_rowid())
 }
 
+pub struct CreateImageParams<'a> {
+    pub album_id: i64,
+    pub filename: &'a str,
+    pub file_size: i64,
+    pub camera_make: &'a str,
+    pub camera_model: &'a str,
+    pub lens_model: &'a str,
+    pub iso: &'a str,
+    pub aperture: &'a str,
+    pub shutter_speed: &'a str,
+    pub focal_length: &'a str,
+    pub light_source: &'a str,
+    pub date_created: &'a str,
+}
+
 pub async fn create_image(
     pool: &SqlitePool,
-    album_id: i64,
-    filename: &str,
-    file_size: i64,
-    camera_make: &str,
-    camera_model: &str,
-    lens_model: &str,
-    iso: &str,
-    aperture: &str,
-    shutter_speed: &str,
-    focal_length: &str,
-    light_source: &str,
-    date_created: &str,
+    params: CreateImageParams<'_>,
 ) -> Result<i64, sqlx::Error> {
     let result = sqlx::query!(
         r#"
@@ -45,18 +49,18 @@ pub async fn create_image(
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
-        album_id,
-        filename,
-        file_size,
-        camera_make,
-        camera_model,
-        lens_model,
-        iso,
-        aperture,
-        shutter_speed,
-        focal_length,
-        light_source,
-        date_created,
+        params.album_id,
+        params.filename,
+        params.file_size,
+        params.camera_make,
+        params.camera_model,
+        params.lens_model,
+        params.iso,
+        params.aperture,
+        params.shutter_speed,
+        params.focal_length,
+        params.light_source,
+        params.date_created,
     )
     .execute(pool)
     .await?;
@@ -64,7 +68,7 @@ pub async fn create_image(
     // Update the number of images in the album
     sqlx::query!(
         "UPDATE albums SET num_images = num_images + 1 WHERE id = ?",
-        album_id
+        params.album_id
     )
     .execute(pool)
     .await?;

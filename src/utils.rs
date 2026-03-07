@@ -13,9 +13,37 @@ use std::sync::Arc;
 use tokio::{fs, task};
 use uuid::Uuid;
 
-use crate::db::create_image;
+use crate::db::{create_image, CreateImageParams};
 use crate::handlers::admin::ProcessedImage;
 use crate::types::{AppState, CreateAlbumRequest};
+
+pub struct ExifMetadata {
+    pub camera_make: String,
+    pub camera_model: String,
+    pub lens_model: String,
+    pub iso: String,
+    pub aperture: String,
+    pub shutter_speed: String,
+    pub focal_length: String,
+    pub light_source: String,
+    pub date_created: String,
+}
+
+impl ExifMetadata {
+    pub fn unknown() -> Self {
+        Self {
+            camera_make: "Unknown".to_string(),
+            camera_model: "Unknown".to_string(),
+            lens_model: "Unknown".to_string(),
+            iso: "Unknown".to_string(),
+            aperture: "Unknown".to_string(),
+            shutter_speed: "Unknown".to_string(),
+            focal_length: "Unknown".to_string(),
+            light_source: "Unknown".to_string(),
+            date_created: "Unknown".to_string(),
+        }
+    }
+}
 
 pub enum ImageQuality {
     Full,
@@ -71,7 +99,7 @@ pub async fn save_image(
     fs::write(path, file_data).await
 }
 
-pub fn extract_exif_metadata(data: &[u8]) -> Option<(String, String, String, String, String, String, String, String, String)> {
+pub fn extract_exif_metadata(data: &[u8]) -> Option<ExifMetadata> {
     match rexif::parse_buffer(data) {
         Ok(exif) => {
             let mut camera_make = None;
@@ -99,17 +127,17 @@ pub fn extract_exif_metadata(data: &[u8]) -> Option<(String, String, String, Str
                 }
             }
 
-            Some((
-                camera_make.unwrap_or(Cow::from("Unknown")).to_string(),
-                camera_model.unwrap_or(Cow::from("Unknown")).to_string(),
-                lens_model.unwrap_or(Cow::from("Unknown")).to_string(),
-                iso.unwrap_or(Cow::from("Unknown")).to_string(),
-                aperture.unwrap_or(Cow::from("Unknown")).to_string(),
-                shutter_speed.unwrap_or(Cow::from("Unknown")).to_string(),
-                focal_length.unwrap_or(Cow::from("Unknown")).to_string(),
-                light_source.unwrap_or(Cow::from("Unknown")).to_string(),
-                date_created.unwrap_or(Cow::from("Unknown")).to_string(),
-            ))
+            Some(ExifMetadata {
+                camera_make: camera_make.unwrap_or(Cow::from("Unknown")).to_string(),
+                camera_model: camera_model.unwrap_or(Cow::from("Unknown")).to_string(),
+                lens_model: lens_model.unwrap_or(Cow::from("Unknown")).to_string(),
+                iso: iso.unwrap_or(Cow::from("Unknown")).to_string(),
+                aperture: aperture.unwrap_or(Cow::from("Unknown")).to_string(),
+                shutter_speed: shutter_speed.unwrap_or(Cow::from("Unknown")).to_string(),
+                focal_length: focal_length.unwrap_or(Cow::from("Unknown")).to_string(),
+                light_source: light_source.unwrap_or(Cow::from("Unknown")).to_string(),
+                date_created: date_created.unwrap_or(Cow::from("Unknown")).to_string(),
+            })
         }
         Err(_) => None,
     }
@@ -202,25 +230,15 @@ pub async fn process_and_save_images(
 
     for (original_filename, data) in images {
         let state = state.clone();
-        let album_id = album_id;
+        let current_album_id = album_id;
         let filename = generate_unique_filename(&original_filename);
 
         tasks.push(tokio::spawn(async move {
             // Extract EXIF metadata
-            let metadata = extract_exif_metadata(&data).unwrap_or((
-                "Unknown".to_string(),
-                "Unknown".to_string(),
-                "Unknown".to_string(),
-                "Unknown".to_string(),
-                "Unknown".to_string(),
-                "Unknown".to_string(),
-                "Unknown".to_string(),
-                "Unknown".to_string(),
-                "Unknown".to_string(),
-            ));
+            let metadata = extract_exif_metadata(&data).unwrap_or_else(ExifMetadata::unknown);
 
             // Save full-resolution image
-            save_image(&data, &filename, album_id, ImageQuality::Full).await?;
+            save_image(&data, &filename, current_album_id, ImageQuality::Full).await?;
 
             // Process the image
             let processed = process_image(data).await?;
@@ -229,13 +247,13 @@ pub async fn process_and_save_images(
             let save_optimized = save_image(
                 &processed.optimized,
                 &filename,
-                album_id,
+                current_album_id,
                 ImageQuality::Optimized,
             );
             let save_thumbnail = save_image(
                 &processed.thumbnail,
                 &filename,
-                album_id,
+                current_album_id,
                 ImageQuality::Thumbnail,
             );
             tokio::try_join!(save_optimized, save_thumbnail)?;
@@ -243,18 +261,20 @@ pub async fn process_and_save_images(
             // Create database entry
             create_image(
                 &state.pool,
-                album_id,
-                &filename,
-                processed.original_size as i64,
-                &metadata.0,
-                &metadata.1,
-                &metadata.2,
-                &metadata.3,
-                &metadata.4,
-                &metadata.5,
-                &metadata.6,
-                &metadata.7,
-                &metadata.8,
+                CreateImageParams {
+                    album_id: current_album_id,
+                    filename: &filename,
+                    file_size: processed.original_size as i64,
+                    camera_make: &metadata.camera_make,
+                    camera_model: &metadata.camera_model,
+                    lens_model: &metadata.lens_model,
+                    iso: &metadata.iso,
+                    aperture: &metadata.aperture,
+                    shutter_speed: &metadata.shutter_speed,
+                    focal_length: &metadata.focal_length,
+                    light_source: &metadata.light_source,
+                    date_created: &metadata.date_created,
+                },
             )
             .await?;
 

@@ -20,162 +20,179 @@
 {% endblock %}
 
 {% block content %}
-<div class="px-4 sm:px-0" 
-    x-data="{ 
-        search: '', 
-        sort: 'date-desc', 
-        albums: JSON.parse($el.dataset.albums),
-        loading: true,
-        options: [
-            { value: 'date-desc', text: 'Newest First' },
-            { value: 'date-asc', text: 'Oldest First' },
-            { value: 'name-asc', text: 'A-Z' },
-            { value: 'name-desc', text: 'Z-A' },
-            { value: 'num-images-desc', text: 'Most Images' },
-            { value: 'num-images-asc', text: 'Fewest Images' }
-        ],
-        get filteredAlbums() {
-            return this.albums
-                .filter(album => {
-                    let query = this.search.toLowerCase();
-                    return album[0].name.toLowerCase().includes(query) || 
-                        (album[0].description && album[0].description.toLowerCase().includes(query)) || 
-                        (album[0].camera_model && album[0].camera_model.toLowerCase().includes(query)) || 
-                        (album[0].lens_model && album[0].lens_model.toLowerCase().includes(query));
-                })
-                .sort((a, b) => {
-                    let aData = a[0], bData = b[0];
-                    switch (this.sort) {
-                        case 'date-desc': return new Date(bData.date) - new Date(aData.date);
-                        case 'date-asc': return new Date(aData.date) - new Date(bData.date);
-                        case 'name-asc': return aData.name.localeCompare(bData.name);
-                        case 'name-desc': return bData.name.localeCompare(aData.name);
-                        case 'num-images-desc': return bData.num_images - aData.num_images;
-                        case 'num-images-asc': return aData.num_images - bData.num_images;
-                        default: return 0;
-                    }
-                });
-        }
-    }"
-    data-albums='{{ albums | safe }}'
-    @sort-changed="sort = $event.detail"
->
-    <!-- Search & Filter -->
-    <div class="flex flex-col pt-6 sm:flex-row justify-between items-center mb-6">
-        <div class="relative w-full sm:w-1/2">
-            <input 
-                type="text" 
-                placeholder="Search albums..." 
-                class="drop-shadow-emerald w-full p-2 pl-10 border border-gray-700 rounded-lg bg-gray-800 bg-opacity-20 backdrop-blur-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                x-model="search"
-            >
-            <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+<div
+  class="px-4 sm:px-0 pt-6 pb-10"
+  x-data="{
+    search: '',
+    sort: 'date-desc',
+    albums: JSON.parse($el.dataset.albums),
+    options: [
+      { value: 'date-desc', text: 'Newest First' },
+      { value: 'date-asc', text: 'Oldest First' },
+      { value: 'name-asc', text: 'A-Z' },
+      { value: 'name-desc', text: 'Z-A' },
+      { value: 'num-images-desc', text: 'Most Images' },
+      { value: 'num-images-asc', text: 'Fewest Images' }
+    ],
+    formatDate(dateString) {
+      const date = new Date(dateString);
+      const day = date.getDate();
+      const month = date.toLocaleDateString('en-US', { month: 'short' });
+      const year = date.toLocaleDateString('en-US', { year: '2-digit' });
+      const ordinalSuffix =
+        (day % 10 === 1 && day !== 11) ? 'st' :
+        (day % 10 === 2 && day !== 12) ? 'nd' :
+        (day % 10 === 3 && day !== 13) ? 'rd' : 'th';
+      return `${day}${ordinalSuffix} ${month} '${year}`;
+    },
+    truncate(value, maxLen) {
+      if (!value) return '';
+      return value.length > maxLen ? value.substring(0, maxLen) + '…' : value;
+    },
+    get filteredAlbums() {
+      const query = this.search.toLowerCase().trim();
+      return this.albums
+        .filter(album => {
+          if (!query) return true;
+          return album[0].name.toLowerCase().includes(query) ||
+            (album[0].description && album[0].description.toLowerCase().includes(query)) ||
+            (album[0].camera_model && album[0].camera_model.toLowerCase().includes(query)) ||
+            (album[0].lens_model && album[0].lens_model.toLowerCase().includes(query));
+        })
+        .sort((a, b) => {
+          const aData = a[0], bData = b[0];
+          switch (this.sort) {
+            case 'date-desc': return new Date(bData.date) - new Date(aData.date);
+            case 'date-asc': return new Date(aData.date) - new Date(bData.date);
+            case 'name-asc': return aData.name.localeCompare(bData.name);
+            case 'name-desc': return bData.name.localeCompare(aData.name);
+            case 'num-images-desc': return bData.num_images - aData.num_images;
+            case 'num-images-asc': return aData.num_images - bData.num_images;
+            default: return 0;
+          }
+        });
+    }
+  }"
+  data-albums='{{ albums | safe }}'
+>  <div class="relative z-20 rounded-lg border border-white/10 bg-white/5 shadow-lg shadow-black/30 backdrop-blur-xs">
+    <div class="relative z-30 border-b border-white/10 p-4 sm:p-5">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div class="relative flex-1 rounded-md border border-white/10 bg-zinc-900/25 focus-within:ring-2 focus-within:ring-[#34D399]">
+          <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+          <input
+            type="text"
+            placeholder="Search albums..."
+            class="h-11 w-full bg-transparent py-2 pl-11 pr-11 text-sm text-white placeholder:text-gray-400 outline-none"
+            x-model="search"
+          />
+          <button
+            type="button"
+            class="absolute right-2 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-gray-300 hover:text-white"
+            x-show="search.length > 0"
+            @click="search = ''"
+          >
+            <i class="fas fa-times"></i>
+          </button>
         </div>
 
-        <div class="relative w-full sm:w-auto mt-4 sm:mt-0 select-none" 
-             x-data="{ open: false }"
-        >
-            <div @click="open = !open" class="drop-shadow-emerald w-full sm:w-auto appearance-none p-2 pl-4 pr-10 border border-gray-700 rounded-lg bg-gray-800 bg-opacity-20 backdrop-blur-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-400 cursor-pointer relative">
-                <span x-text="options.find(option => option.value === sort).text"></span>
-                <i class="fas fa-chevron-down absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none"></i>
-            </div>
-            <div x-show="open" @click.away="open = false" class="absolute mt-1 w-full sm:w-auto bg-gray-800 bg-opacity-80 backdrop-blur-xs rounded-lg shadow-lg z-10">
-                <template x-for="option in options" :key="option.value">
-                    <div 
-                        @click="sort = option.value; open = false" 
-                        class="p-2 pl-4 pr-10 text-white hover:bg-gray-700 cursor-pointer" 
-                        :class="{ 'bg-gray-700': sort === option.value }" 
-                        x-text="option.text"
-                    ></div>
-                </template>
-            </div>
+        <div class="relative sm:w-64" x-data="{ open: false }" @keydown.escape.window="open = false">
+          <button
+            type="button"
+            class="flex h-11 w-full items-center justify-between gap-3 rounded-md border border-white/10 bg-zinc-900/25 px-4 text-left text-sm text-white outline-none hover:bg-white/5 focus:ring-2 focus:ring-[#34D399]"
+            @click="open = !open"
+            :aria-expanded="open.toString()"
+            aria-haspopup="listbox"
+          >
+            <span class="truncate" x-text="options.find(o => o.value === sort)?.text"></span>
+            <i class="fas fa-chevron-down text-gray-400 transition-transform duration-200" :class="open ? 'rotate-180' : ''"></i>
+          </button>
+
+          <div
+            class="absolute right-0 top-full z-50 mt-2 w-full overflow-hidden rounded-md border border-emerald-400/20 bg-zinc-950/95 backdrop-blur-xs shadow-2xl"
+            x-show="open"
+            x-transition.opacity
+            @click.away="open = false"
+            role="listbox"
+          >
+            <template x-for="option in options" :key="option.value">
+              <button
+                type="button"
+                class="flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm text-gray-100 hover:bg-emerald-500/10"
+                :class="sort === option.value ? 'bg-emerald-500/15 text-emerald-100' : ''"
+                @click="sort = option.value; open = false"
+                role="option"
+                :aria-selected="(sort === option.value).toString()"
+              >
+                <span class="truncate" x-text="option.text"></span>
+                <i class="fas fa-check text-emerald-300/90" x-show="sort === option.value"></i>
+              </button>
+            </template>
+          </div>
         </div>
+      </div>
     </div>
 
-    <!-- Albums Grid -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pb-6">
-        <template x-for="(album, index) in filteredAlbums" :key="index">
-            <a :href="'/albums/' + album[0].id" class="group block rounded-lg overflow-hidden shadow-lg transition-all duration-300 hover:shadow-2xl hover:scale-105 relative aspect-[4/3] w-full">
-              <div class="absolute inset-0">
-                <div x-show="!album[1]" class="w-full h-full flex items-center justify-center text-gray-500">
-                  <div class="animate-pulse bg-gray-700 w-full h-full"></div>
+    <div class="relative z-0 p-4 sm:p-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 3xl:grid-cols-4 gap-6">
+      <template x-for="(album, index) in filteredAlbums" :key="index">
+        <a
+          :href="'/albums/' + album[0].id"
+          class="group relative block aspect-[4/3] w-full overflow-hidden rounded-lg bg-black/20 shadow-sm transition duration-200 hover:bg-black/25 hover:shadow-xl hover:shadow-emerald-500/10"
+        >
+          <div class="absolute inset-0">
+            <div x-show="!album[1]" class="w-full h-full">
+              <div class="animate-pulse bg-gray-700 w-full h-full"></div>
+            </div>
+
+            <template x-if="album[1]">
+              <img
+                :src="'/uploads/' + album[0].id + '/thumbnail/' + album[1]"
+                :alt="album[0].name"
+                class="block h-full w-full origin-center object-cover transition-transform duration-300 will-change-transform transform-gpu group-hover:scale-105"
+                :loading="index === 0 ? 'eager' : 'lazy'"
+              />
+            </template>
+
+            <div class="pointer-events-none absolute inset-0 grid place-items-center opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100">
+              <span class="text-xs font-semibold tracking-[0.22em] uppercase text-white [text-shadow:0_2px_14px_rgba(0,0,0,0.9)]">View album</span>
+            </div>
+          </div>
+
+          <div class="absolute inset-x-0 bottom-0 p-3">
+            <div class="rounded-md border border-white/10 bg-black/60 backdrop-blur-sm px-3 py-2">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0 flex-1">
+                  <h2 class="font-merienda text-[15px] font-semibold leading-tight text-white truncate" x-text="album[0].name"></h2>
                 </div>
-          
-                <template x-if="album[1]">
-                    <img 
-                    :src="'/uploads/' + album[0].id + '/thumbnail/' + album[1]"
-                    :alt="album[0].name"
-                    class="w-full h-full object-cover transition-opacity duration-300"
-                    :loading="index === 0 ? 'eager' : 'lazy'"
-                    @load="loading = false"
-                  >                  
-                </template>
-          
-                <div class="absolute inset-0 bg-black opacity-0 transition-opacity duration-300 group-hover:opacity-50"></div>
-                <div class="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-                  <span class="text-white text-2xl font-bold">View Album</span>
+
+                <div class="shrink-0 text-right text-[12px] text-gray-200/80">
+                  <div class="leading-tight" x-text="formatDate(album[0].date)"></div>
+                  <div class="mt-0.5 inline-flex items-center justify-end gap-1 leading-tight">
+                    <i class="fas fa-images text-gray-200/80"></i>
+                    <span x-text="album[0].num_images"></span>
+                  </div>
                 </div>
               </div>
-        
-                <div class="relative h-full p-4 flex flex-col justify-between">
-                    <div class="flex justify-between items-start">
-                        <div class="bg-black/50 backdrop-blur-sm px-2 py-1 rounded-full text-white text-xs">
-                            <i class="fas fa-images mr-1"></i>
-                            <span x-text="album[0].num_images"></span>
-                        </div>
-        
-                        <span class="bg-black/50 backdrop-blur-sm px-2 py-1 rounded-full text-white text-xs"
-                            x-text="formatDate(album[0].date)">
-                        </span>
 
-                        <script>
-                            function formatDate(dateString) {
-                                const date = new Date(dateString);
-                                const day = date.getDate();
-                                const month = date.toLocaleDateString('en-US', { month: 'short' });
-                                const year = date.toLocaleDateString('en-US', { year: '2-digit' });
-
-                                const ordinalSuffix = 
-                                (day % 10 === 1 && day !== 11) ? 'st' :
-                                (day % 10 === 2 && day !== 12) ? 'nd' :
-                                (day % 10 === 3 && day !== 13) ? 'rd' : 'th';
-
-                                return `${day}${ordinalSuffix} ${month} '${year}`;
-                            }
-                        </script>
-                    </div>
-        
-                    <div class="space-y-3">
-                        <div>
-                            <h2 class="font-merienda text-xl font-bold text-white drop-shadow-lg text-center" 
-                                x-text="album[0].name" 
-                                style="text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);">
-                            </h2>
-                        </div>
-        
-                        <div class="flex justify-between gap-2 text-xs text-white">
-                            <span x-show="album[0].camera_model" 
-                                class="bg-black/50 backdrop-blur-sm px-2 py-1 rounded-full truncate">
-                                <i class="fas fa-camera mr-1"></i>
-                                <span x-text="album[0].camera_model?.length > 15 ? album[0].camera_model.substring(0, 15) + '...' : album[0].camera_model"></span>
-                            </span>
-                            
-                            <span x-show="album[0].lens_model" 
-                                class="bg-black/50 backdrop-blur-sm px-2 py-1 rounded-full truncate">
-                                <i class="fas fa-circle mr-1"></i>
-                                <span x-text="album[0].lens_model?.length > 20 ? album[0].lens_model.substring(0, 20) + '...' : album[0].lens_model"></span>
-                            </span>
-                            
-                            <span x-show="album[0].aperture" 
-                                class="bg-black/50 backdrop-blur-sm px-2 py-1 rounded-full">
-                                <i class="fas fa-dot-circle mr-1"></i>
-                                <span x-text="album[0].aperture?.length > 15 ? album[0].aperture.substring(0, 15) + '...' : album[0].aperture"></span>
-                            </span>
-                        </div>
-                    </div>
-                </div>
-            </a>
-        </template>
+              <div class="mt-2 border-t border-white/10 pt-2">
+              <div class="flex items-center gap-2 overflow-hidden whitespace-nowrap text-[12px] text-gray-200/80" x-show="album[0].camera_model || album[0].lens_model || album[0].aperture">
+                <span class="min-w-0 truncate" x-show="album[0].camera_model" x-text="truncate(album[0].camera_model, 28)"></span>
+                <template x-if="album[0].camera_model && (album[0].lens_model || album[0].aperture)">
+                  <span class="h-3 w-px shrink-0 bg-white/15"></span>
+                </template>
+                <span class="min-w-0 truncate" x-show="album[0].lens_model" x-text="truncate(album[0].lens_model, 28)"></span>
+                <template x-if="album[0].lens_model && album[0].aperture">
+                  <span class="h-3 w-px shrink-0 bg-white/15"></span>
+                </template>
+                <span class="shrink-0" x-show="album[0].aperture" x-text="truncate(album[0].aperture, 10)"></span>
+              </div>
+              </div>
+            </div>
+          </div>
+        </a>
+      </template>
+      </div>
     </div>
+  </div>
 </div>
 {% endblock %}

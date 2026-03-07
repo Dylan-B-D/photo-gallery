@@ -12,7 +12,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     
     <!-- Primary fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700&family=Merienda:wght@400;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700&family=Cinzel:wght@400;700&display=swap" rel="stylesheet" />
     
     <!-- Secondary fonts loaded with lower priority -->
     <link href="https://fonts.googleapis.com/css2?family=Exo:wght@400;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
@@ -25,13 +25,16 @@
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     
     {% if app_env == "development" %}
-        <script src="https://cdn.tailwindcss.com" defer onload="configureTailwind()"></script>
+        <style id="tw-cloak">html{visibility:hidden}</style>
         <script>
-          function configureTailwind() {
-            tailwind.config = {
+          tailwind = {
+            config: {
               darkMode: "class",
               theme: {
                 extend: {
+                  screens: {
+                    "3xl": "2000px",
+                  },
                   colors: {
                     primary: "#18181b",
                     secondary: "#27272a",
@@ -39,25 +42,30 @@
                   },
                   fontFamily: {
                     sans: ["Nunito", "serif"],
-                    merienda: ["Merienda", "serif"],
+                    merienda: ["Cinzel", "serif"],
                   },
                   backdropBlur: {
-                    xs: '2px',
+                    xs: "2px",
                   },
                   dropShadow: {
-                    'emerald': '0 4px 6px rgba(16, 185, 129, 0.5)',
+                    emerald: "0 4px 6px rgba(16, 185, 129, 0.5)",
                   },
                 },
               },
-            };
-          }
+            },
+          };
         </script>
+        <script src="https://cdn.tailwindcss.com" onload="document.documentElement.style.visibility='visible'; const cloak=document.getElementById('tw-cloak'); if (cloak) cloak.remove();"></script>
     {% else %}
+        <link rel="preload" href="/static/css/tailwind.css" as="style" />
         <link rel="stylesheet" href="/static/css/tailwind.css" />
     {% endif %}
     
     <style>
       /* Critical CSS inlined */
+      html {
+        scrollbar-gutter: stable;
+      }
       body {
         background-color: #090b09;
         position: relative;

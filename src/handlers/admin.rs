@@ -89,7 +89,7 @@ pub async fn create_album_handler(
         }
     };
 
-    if let Err(_) = create_album_directory(album_id).await {
+    if create_album_directory(album_id).await.is_err() {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
             "Failed to create album directory",
@@ -232,7 +232,7 @@ pub async fn delete_album_handler(
     cookies: Cookies,
 ) -> Result<Json<Value>, (StatusCode, String)> {
     // Require authentication
-    if let Err(_) = require_auth(cookies, State(state.clone())).await {
+    if require_auth(cookies, State(state.clone())).await.is_err() {
         return Err((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()));
     }
 
@@ -257,7 +257,7 @@ pub async fn delete_image_handler(
     State(state): State<Arc<AppState>>,
     cookies: Cookies,
 ) -> Response {
-    if let Err(_) = require_auth(cookies, State(state.clone())).await {
+    if require_auth(cookies, State(state.clone())).await.is_err() {
         return StatusCode::UNAUTHORIZED.into_response();
     }
 
