@@ -1,10 +1,12 @@
 use axum::routing::{delete, get, post, put};
+use axum::Json;
 use axum::Router;
 use dotenv::dotenv;
 use handlers::admin::admin_handler;
 use handlers::album::album_handler;
 use handlers::home::home_handler;
 use handlers::login::{login_handler, login_post_handler, logout_handler};
+use serde_json::json;
 use std::env;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -59,6 +61,7 @@ async fn main() {
         .route("/login", get(login_handler).post(login_post_handler))
         .route("/admin", get(admin_handler))
         .route("/albums/{id}", get(album_handler))
+        .route("/api/version", get(version_handler))
         .route("/api/albums", post(handlers::admin::create_album_handler))
         .route(
             "/api/albums/{id}",
@@ -105,4 +108,21 @@ async fn main() {
     )
     .await
     .unwrap();
+}
+
+async fn version_handler() -> Json<serde_json::Value> {
+    Json(json!({
+        "package": {
+            "name": env!("CARGO_PKG_NAME"),
+            "version": env!("CARGO_PKG_VERSION"),
+        },
+        "build": {
+            "profile": option_env!("BUILD_PROFILE").unwrap_or("unknown"),
+            "timestamp": option_env!("BUILD_TIMESTAMP").unwrap_or("0"),
+        },
+        "git": {
+            "sha": option_env!("GIT_SHA").unwrap_or("unknown"),
+            "describe": option_env!("GIT_DESCRIBE").unwrap_or("unknown"),
+        }
+    }))
 }
