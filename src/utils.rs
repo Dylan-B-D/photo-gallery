@@ -1,6 +1,3 @@
-use axum::extract::Multipart;
-use axum::http::StatusCode;
-use axum::response::IntoResponse;
 use fast_image_resize::images::Image;
 use fast_image_resize::{PixelType, Resizer};
 use image::RgbImage;
@@ -15,7 +12,11 @@ use uuid::Uuid;
 
 use crate::db::{create_image, CreateImageParams};
 use crate::handlers::admin::ProcessedImage;
-use crate::types::{AppState, CreateAlbumRequest};
+use crate::types::AppState;
+
+fn uploads_base_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("uploads")
+}
 
 pub struct ExifMetadata {
     pub camera_make: String,
@@ -62,7 +63,7 @@ impl ImageQuality {
 }
 
 pub async fn create_album_directory(album_id: i64) -> io::Result<()> {
-    let base_path = PathBuf::from("uploads").join(album_id.to_string());
+    let base_path = uploads_base_dir().join(album_id.to_string());
 
     // Create directories for each quality
     for quality in [
@@ -91,7 +92,7 @@ pub async fn save_image(
     album_id: i64,
     quality: ImageQuality,
 ) -> io::Result<()> {
-    let path = PathBuf::from("uploads")
+    let path = uploads_base_dir()
         .join(album_id.to_string())
         .join(quality.as_str())
         .join(filename);
@@ -148,10 +149,25 @@ pub fn extract_exif_metadata(data: &[u8]) -> Option<ExifMetadata> {
 }
 
 pub async fn process_image(data: Vec<u8>) -> Result<ProcessedImage, Box<dyn Error + Send + Sync>> {
-    const OPTIMIZED_MAX_SIZE: u32 = 1920;
-    const THUMBNAIL_MAX_SIZE: u32 = 400;
-    const OPTIMIZED_QUALITY: i32 = 85;
-    const THUMBNAIL_QUALITY: i32 = 95;
+    let optimized_max_size = std::env::var("OPTIMIZED_MAX_SIZE")
+        .ok()
+        .and_then(|s| s.parse::<u32>().ok())
+        .unwrap_or(1920);
+    let thumbnail_max_size = std::env::var("THUMBNAIL_MAX_SIZE")
+        .ok()
+        .and_then(|s| s.parse::<u32>().ok())
+        .unwrap_or(400);
+
+    let optimized_quality = std::env::var("OPTIMIZED_QUALITY")
+        .ok()
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(85)
+        .clamp(1, 100);
+    let thumbnail_quality = std::env::var("THUMBNAIL_QUALITY")
+        .ok()
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(95)
+        .clamp(1, 100);
 
     task::spawn_blocking(move || {
         // Decompress JPEG to RGB image
@@ -166,14 +182,14 @@ pub async fn process_image(data: Vec<u8>) -> Result<ProcessedImage, Box<dyn Erro
         let mut resizer = Resizer::new();
 
         // Optimize to max OPTIMIZED_MAX_SIZE
-        let (opt_width, opt_height) = calculate_dimensions(width, height, OPTIMIZED_MAX_SIZE);
+        let (opt_width, opt_height) = calculate_dimensions(width, height, optimized_max_size);
         let mut optimized_img = Image::new(opt_width, opt_height, PixelType::U8x3);
 
         // Resize the image
         resizer.resize(&src_image, &mut optimized_img, None)?;
 
         // Create low rez thumbnail
-        let (thumb_width, thumb_height) = calculate_dimensions(width, height, THUMBNAIL_MAX_SIZE);
+        let (thumb_width, thumb_height) = calculate_dimensions(width, height, thumbnail_max_size);
         let mut thumbnail_img = Image::new(thumb_width, thumb_height, PixelType::U8x3);
 
         resizer.resize(&src_image, &mut thumbnail_img, None)?;
@@ -190,12 +206,12 @@ pub async fn process_image(data: Vec<u8>) -> Result<ProcessedImage, Box<dyn Erro
         // Compress using turbojpeg
         let optimized = turbojpeg::compress_image(
             &optimized_rgb,
-            OPTIMIZED_QUALITY,
+            optimized_quality,
             turbojpeg::Subsamp::Sub2x2,
         )?;
         let thumbnail = turbojpeg::compress_image(
             &thumbnail_rgb,
-            THUMBNAIL_QUALITY,
+            thumbnail_quality,
             turbojpeg::Subsamp::Sub2x2,
         )?;
 
@@ -226,138 +242,59 @@ fn calculate_dimensions(width: u32, height: u32, max_size: u32) -> (u32, u32) {
 }
 
 pub async fn delete_album_directory(album_id: i64) -> io::Result<()> {
-    let path = PathBuf::from("uploads").join(album_id.to_string());
+    let path = uploads_base_dir().join(album_id.to_string());
     if path.exists() {
         fs::remove_dir_all(path).await?;
     }
     Ok(())
 }
 
-pub async fn process_and_save_images(
+pub async fn process_and_save_image(
     state: Arc<AppState>,
     album_id: i64,
-    images: Vec<(String, Vec<u8>)>,
-) -> Result<usize, Box<dyn Error + Send + Sync>> {
-    let mut tasks = Vec::new();
+    original_filename: String,
+    data: Vec<u8>,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let filename = generate_unique_filename(&original_filename);
 
-    for (original_filename, data) in images {
-        let state = state.clone();
-        let current_album_id = album_id;
-        let filename = generate_unique_filename(&original_filename);
+    let metadata = extract_exif_metadata(&data).unwrap_or_else(ExifMetadata::unknown);
 
-        tasks.push(tokio::spawn(async move {
-            // Extract EXIF metadata
-            let metadata = extract_exif_metadata(&data).unwrap_or_else(ExifMetadata::unknown);
+    save_image(&data, &filename, album_id, ImageQuality::Full).await?;
 
-            // Save full-resolution image
-            save_image(&data, &filename, current_album_id, ImageQuality::Full).await?;
+    let processed = process_image(data).await?;
 
-            // Process the image
-            let processed = process_image(data).await?;
+    let save_optimized = save_image(
+        &processed.optimized,
+        &filename,
+        album_id,
+        ImageQuality::Optimized,
+    );
+    let save_thumbnail = save_image(
+        &processed.thumbnail,
+        &filename,
+        album_id,
+        ImageQuality::Thumbnail,
+    );
+    tokio::try_join!(save_optimized, save_thumbnail)?;
 
-            // Save optimized and thumbnail versions
-            let save_optimized = save_image(
-                &processed.optimized,
-                &filename,
-                current_album_id,
-                ImageQuality::Optimized,
-            );
-            let save_thumbnail = save_image(
-                &processed.thumbnail,
-                &filename,
-                current_album_id,
-                ImageQuality::Thumbnail,
-            );
-            tokio::try_join!(save_optimized, save_thumbnail)?;
+    create_image(
+        &state.pool,
+        CreateImageParams {
+            album_id,
+            filename: &filename,
+            file_size: processed.original_size as i64,
+            camera_make: &metadata.camera_make,
+            camera_model: &metadata.camera_model,
+            lens_model: &metadata.lens_model,
+            iso: &metadata.iso,
+            aperture: &metadata.aperture,
+            shutter_speed: &metadata.shutter_speed,
+            focal_length: &metadata.focal_length,
+            light_source: &metadata.light_source,
+            date_created: &metadata.date_created,
+        },
+    )
+    .await?;
 
-            // Create database entry
-            create_image(
-                &state.pool,
-                CreateImageParams {
-                    album_id: current_album_id,
-                    filename: &filename,
-                    file_size: processed.original_size as i64,
-                    camera_make: &metadata.camera_make,
-                    camera_model: &metadata.camera_model,
-                    lens_model: &metadata.lens_model,
-                    iso: &metadata.iso,
-                    aperture: &metadata.aperture,
-                    shutter_speed: &metadata.shutter_speed,
-                    focal_length: &metadata.focal_length,
-                    light_source: &metadata.light_source,
-                    date_created: &metadata.date_created,
-                },
-            )
-            .await?;
-
-            Ok::<(), Box<dyn Error + Send + Sync>>(())
-        }));
-    }
-
-    let results = futures::future::join_all(tasks).await;
-    Ok(results.into_iter().filter(|r| r.is_ok()).count())
-}
-
-/// Extracts multipart fields from the stream.
-/// - `album_field`: the field name that contains the album JSON.
-/// - `image_field`: the field name that contains image file data.
-/// - `deleted_field`: optional field name for a comma‐separated list of deleted image IDs.
-pub async fn extract_multipart_fields(
-    mut multipart: Multipart,
-    album_field: &str,
-    image_field: &str,
-    deleted_field: Option<&str>,
-) -> Result<(Option<CreateAlbumRequest>, Vec<(String, Vec<u8>)>, Vec<i64>), impl IntoResponse> {
-    let mut album_data: Option<CreateAlbumRequest> = None;
-    let mut images: Vec<(String, Vec<u8>)> = Vec::new();
-    let mut deleted_ids: Vec<i64> = Vec::new();
-
-    while let Ok(Some(mut field)) = multipart.next_field().await {
-        let field_name = field.name().unwrap_or("").to_string();
-        match field_name.as_str() {
-            f if f == album_field => {
-                if let Ok(bytes) = field.bytes().await {
-                    match serde_json::from_slice(&bytes) {
-                        Ok(data) => album_data = Some(data),
-                        Err(_) => {
-                            return Err((StatusCode::BAD_REQUEST, "Invalid album data format")
-                                .into_response())
-                        }
-                    }
-                }
-            }
-            f if f == image_field => {
-                let filename = field
-                    .file_name()
-                    .map(ToString::to_string)
-                    .unwrap_or_else(|| "unknown.jpg".to_string());
-                let mut file_bytes = Vec::new();
-                while let Ok(Some(chunk)) = field.chunk().await {
-                    file_bytes.extend_from_slice(&chunk);
-                }
-                if !file_bytes.is_empty() {
-                    images.push((filename, file_bytes));
-                }
-            }
-            f if deleted_field.is_some() && f == deleted_field.unwrap() => {
-                if let Ok(bytes) = field.bytes().await {
-                    let ids_str = String::from_utf8_lossy(&bytes);
-                    deleted_ids = ids_str
-                        .split(',')
-                        .filter_map(|s| {
-                            let trimmed = s.trim();
-                            if !trimmed.is_empty() {
-                                trimmed.parse::<i64>().ok()
-                            } else {
-                                None
-                            }
-                        })
-                        .collect();
-                }
-            }
-            _ => continue,
-        }
-    }
-
-    Ok((album_data, images, deleted_ids))
+    Ok(())
 }

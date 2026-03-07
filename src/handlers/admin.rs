@@ -7,6 +7,8 @@ use axum::{
 use minijinja::context;
 use serde_json::{json, Value};
 use std::{fs, path::PathBuf, sync::Arc, time::Instant};
+use tokio::sync::Semaphore;
+use tokio::task::JoinSet;
 use tower_cookies::Cookies;
 
 pub struct ProcessedImage {
@@ -18,11 +20,8 @@ pub struct ProcessedImage {
 use crate::{
     auth::middleware::require_auth,
     db::{self, create_album, update_album_metadata},
-    types::AppState,
-    utils::{
-        create_album_directory, delete_album_directory, extract_multipart_fields,
-        process_and_save_images, ImageQuality,
-    },
+    types::{AppState, CreateAlbumRequest},
+    utils::{create_album_directory, delete_album_directory, process_and_save_image, ImageQuality},
 };
 
 pub async fn admin_handler(
@@ -57,7 +56,7 @@ pub async fn admin_handler(
 pub async fn create_album_handler(
     State(state): State<Arc<AppState>>,
     cookies: Cookies,
-    multipart: Multipart,
+    mut multipart: Multipart,
 ) -> impl IntoResponse {
     let start_total = Instant::now();
 
@@ -66,47 +65,124 @@ pub async fn create_album_handler(
         return redirect.into_response();
     }
 
-    // ===== Multipart Extraction =====
+    let default_concurrency = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .ok()
+        .and_then(|n| {
+            let app_env = std::env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
+            if app_env == "production" {
+                Some(std::cmp::min(6, std::cmp::max(2, n)))
+            } else {
+                Some(std::cmp::min(8, std::cmp::max(4, n)))
+            }
+        })
+        .unwrap_or(2);
+
+    let concurrency = std::env::var("IMAGE_PROCESS_CONCURRENCY")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(default_concurrency);
+
+    let semaphore = Arc::new(Semaphore::new(concurrency));
+    let mut join_set: JoinSet<Result<(), Box<dyn std::error::Error + Send + Sync>>> =
+        JoinSet::new();
+
     let start_multipart = Instant::now();
-    let (album_data_opt, image_data, _) =
-        match extract_multipart_fields(multipart, "album", "images", None).await {
-            Ok(result) => result,
-            Err(resp) => return resp.into_response(),
-        };
+    let mut album_id: Option<i64> = None;
+    let mut album_creation_duration = None;
+
+    while let Ok(Some(mut field)) = multipart.next_field().await {
+        let field_name = field.name().unwrap_or("");
+        match field_name {
+            "album" => {
+                let bytes = match field.bytes().await {
+                    Ok(bytes) => bytes,
+                    Err(e) => return (StatusCode::BAD_REQUEST, e.to_string()).into_response(),
+                };
+
+                let album_data: CreateAlbumRequest = match serde_json::from_slice(&bytes) {
+                    Ok(data) => data,
+                    Err(_) => {
+                        return (StatusCode::BAD_REQUEST, "Invalid album data format")
+                            .into_response()
+                    }
+                };
+
+                let start_album_creation = Instant::now();
+                let created_album_id = match create_album(&state.pool, &album_data).await {
+                    Ok(id) => id,
+                    Err(_) => {
+                        return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create album")
+                            .into_response()
+                    }
+                };
+
+                if create_album_directory(created_album_id).await.is_err() {
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Failed to create album directory",
+                    )
+                        .into_response();
+                }
+
+                album_creation_duration = Some(start_album_creation.elapsed());
+                album_id = Some(created_album_id);
+            }
+            "images" => {
+                let current_album_id = match album_id {
+                    Some(id) => id,
+                    None => return (StatusCode::BAD_REQUEST, "Missing album data").into_response(),
+                };
+
+                let permit = match semaphore.clone().acquire_owned().await {
+                    Ok(p) => p,
+                    Err(e) => {
+                        return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
+                    }
+                };
+
+                let original_filename = field
+                    .file_name()
+                    .map(ToString::to_string)
+                    .unwrap_or_else(|| "unknown.jpg".to_string());
+
+                let mut file_bytes = Vec::new();
+                while let Ok(Some(chunk)) = field.chunk().await {
+                    file_bytes.extend_from_slice(&chunk);
+                }
+                if file_bytes.is_empty() {
+                    continue;
+                }
+
+                let state = state.clone();
+                join_set.spawn(async move {
+                    let _permit = permit;
+                    process_and_save_image(state, current_album_id, original_filename, file_bytes)
+                        .await
+                });
+            }
+            _ => {}
+        }
+    }
+
     let multipart_duration = start_multipart.elapsed();
 
-    let album_data = match album_data_opt {
-        Some(data) => data,
+    let album_id = match album_id {
+        Some(id) => id,
         None => return (StatusCode::BAD_REQUEST, "Missing album data").into_response(),
     };
 
-    // ===== Album Creation & Directory Setup =====
-    let start_album_creation = Instant::now();
-    let album_id = match create_album(&state.pool, &album_data).await {
-        Ok(id) => id,
-        Err(_) => {
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create album").into_response()
-        }
-    };
-
-    if create_album_directory(album_id).await.is_err() {
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Failed to create album directory",
-        )
-            .into_response();
-    }
-    let album_creation_duration = start_album_creation.elapsed();
-
-    // ===== Image Processing (Concurrent) =====
     let start_image_processing = Instant::now();
-    let processed_images = match process_and_save_images(state.clone(), album_id, image_data).await
-    {
-        Ok(count) => count,
-        Err(e) => {
-            return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
+    let mut processed_images = 0usize;
+    while let Some(result) = join_set.join_next().await {
+        match result {
+            Ok(Ok(())) => processed_images += 1,
+            Ok(Err(e)) => {
+                return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
+            }
+            Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
         }
-    };
+    }
 
     // Update album metadata
     if let Err(e) = update_album_metadata(&state.pool, album_id).await {
@@ -122,7 +198,7 @@ pub async fn create_album_handler(
         "images_processed": processed_images,
         "timings": {
             "multipart_extraction": format!("{:?}", multipart_duration),
-            "album_creation": format!("{:?}", album_creation_duration),
+            "album_creation": format!("{:?}", album_creation_duration.unwrap_or_default()),
             "image_processing": format!("{:?}", image_processing_duration),
             "total": format!("{:?}", total_duration)
         }
@@ -134,7 +210,7 @@ pub async fn update_album_handler(
     Path(album_id): Path<i64>,
     State(state): State<Arc<AppState>>,
     cookies: Cookies,
-    multipart: Multipart,
+    mut multipart: Multipart,
 ) -> impl IntoResponse {
     let start_total = Instant::now();
 
@@ -143,14 +219,90 @@ pub async fn update_album_handler(
         return redirect.into_response();
     }
 
-    // ===== Multipart Extraction =====
-    let (album_data, new_images, deleted_image_ids) =
-        match extract_multipart_fields(multipart, "album", "new_images", Some("deleted_images"))
-            .await
-        {
-            Ok(result) => result,
-            Err(resp) => return resp.into_response(),
-        };
+    let default_concurrency = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .ok()
+        .and_then(|n| {
+            let app_env = std::env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
+            if app_env == "production" {
+                Some(std::cmp::min(6, std::cmp::max(2, n)))
+            } else {
+                Some(std::cmp::min(8, std::cmp::max(4, n)))
+            }
+        })
+        .unwrap_or(2);
+
+    let concurrency = std::env::var("IMAGE_PROCESS_CONCURRENCY")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(default_concurrency);
+
+    let semaphore = Arc::new(Semaphore::new(concurrency));
+    let mut join_set: JoinSet<Result<(), Box<dyn std::error::Error + Send + Sync>>> =
+        JoinSet::new();
+
+    let mut album_data: Option<CreateAlbumRequest> = None;
+    let mut deleted_image_ids: Vec<i64> = Vec::new();
+
+    while let Ok(Some(mut field)) = multipart.next_field().await {
+        let field_name = field.name().unwrap_or("");
+        match field_name {
+            "album" => {
+                if let Ok(bytes) = field.bytes().await {
+                    if let Ok(data) = serde_json::from_slice::<CreateAlbumRequest>(&bytes) {
+                        album_data = Some(data);
+                    } else {
+                        return (StatusCode::BAD_REQUEST, "Invalid album data format")
+                            .into_response();
+                    }
+                }
+            }
+            "deleted_images" => {
+                if let Ok(bytes) = field.bytes().await {
+                    let ids_str = String::from_utf8_lossy(&bytes);
+                    deleted_image_ids = ids_str
+                        .split(',')
+                        .filter_map(|s| {
+                            let trimmed = s.trim();
+                            if !trimmed.is_empty() {
+                                trimmed.parse::<i64>().ok()
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                }
+            }
+            "new_images" => {
+                let permit = match semaphore.clone().acquire_owned().await {
+                    Ok(p) => p,
+                    Err(e) => {
+                        return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
+                    }
+                };
+
+                let original_filename = field
+                    .file_name()
+                    .map(ToString::to_string)
+                    .unwrap_or_else(|| "unknown.jpg".to_string());
+
+                let mut file_bytes = Vec::new();
+                while let Ok(Some(chunk)) = field.chunk().await {
+                    file_bytes.extend_from_slice(&chunk);
+                }
+                if file_bytes.is_empty() {
+                    continue;
+                }
+
+                let state = state.clone();
+                join_set.spawn(async move {
+                    let _permit = permit;
+                    process_and_save_image(state, album_id, original_filename, file_bytes).await
+                });
+            }
+            _ => {}
+        }
+    }
 
     // Update album metadata if provided
     if let Some(album_data) = &album_data {
@@ -179,7 +331,9 @@ pub async fn update_album_handler(
                 }
 
                 // Delete files
-                let base_path = PathBuf::from("uploads").join(image.album_id.to_string());
+                let base_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("uploads")
+                    .join(image.album_id.to_string());
                 for quality in [
                     ImageQuality::Full,
                     ImageQuality::Optimized,
@@ -201,14 +355,16 @@ pub async fn update_album_handler(
         }
     }
 
-    // Process new images
-    let processed_images = match process_and_save_images(state.clone(), album_id, new_images).await
-    {
-        Ok(count) => count,
-        Err(e) => {
-            return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
+    let mut processed_images = 0usize;
+    while let Some(result) = join_set.join_next().await {
+        match result {
+            Ok(Ok(())) => processed_images += 1,
+            Ok(Err(e)) => {
+                return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
+            }
+            Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
         }
-    };
+    }
 
     // Update album statistics
     if let Err(e) = db::update_album_metadata(&state.pool, album_id).await {
@@ -274,7 +430,9 @@ pub async fn delete_image_handler(
     }
 
     // Delete files from filesystem
-    let base_path = PathBuf::from("uploads").join(image.album_id.to_string());
+    let base_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("uploads")
+        .join(image.album_id.to_string());
     for quality in [
         ImageQuality::Full,
         ImageQuality::Optimized,

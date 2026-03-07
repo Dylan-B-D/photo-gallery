@@ -176,80 +176,162 @@
             this.images = [];
           },
           
-          handleSubmit() {
-            if (this.isSubmitting) return;  // Prevent duplicate submissions
+          async handleSubmit() {
+            if (this.isSubmitting) return;
             this.isSubmitting = true;
-            const formData = new FormData();
-            
-            // Add album data
-            const albumData = {
+
+            try {
+              const albumData = {
                 name: this.albumName,
                 description: this.description,
                 date: this.date
-            };
-            
-            // Create a Blob from the JSON data
-            const albumBlob = new Blob([JSON.stringify(albumData)], {
-                type: 'application/json'
-            });
-            formData.append('album', albumBlob);
-            
-            // Add all images
-            this.images.forEach((img, index) => {
-                formData.append('images', img.file, img.name);
-            });
-            
-            // Submit the form with appropriate headers
-            fetch('/api/albums', {
-                method: 'POST',
-                body: formData,
-            })
-            .then(async response => {
-                const text = await response.text();
-                
-                try {
-                    const data = JSON.parse(text);
-                    if (!response.ok) {
-                        throw new Error(data.message || 'Failed to create album');
-                    }
-                    return data;
-                } catch (e) {
-                    console.error('Failed to parse response:', e);
-                    throw new Error('Invalid server response');
-                }
-            })
-            .then(data => {
-                if (data.status === 'success') {
-                    // Clear form and close modal
-                    this.albumName = '';
-                    this.description = '';
-                    this.date = new Date().toISOString().split('T')[0];
-                    this.removeAllImages();
-                    this.showCreateAlbumForm = false;
+              };
 
-                    // Show success message
-                    alert(`
+              const albumBlob = new Blob([JSON.stringify(albumData)], {
+                type: 'application/json'
+              });
+
+              const totalBytes = this.images.reduce((sum, img) => sum + (img?.file?.size || 0), 0);
+              const isLocal =
+                window.location.hostname === 'localhost' ||
+                window.location.hostname === '127.0.0.1' ||
+                window.location.hostname === '::1';
+              const maxBatchBytes = (isLocal ? 350 : 80) * 1024 * 1024;
+              const maxBatchCount = isLocal ? 120 : 50;
+              const shouldBatch = this.images.length > maxBatchCount || totalBytes > maxBatchBytes;
+
+              if (!shouldBatch) {
+                const formData = new FormData();
+                formData.append('album', albumBlob);
+                this.images.forEach(img => {
+                  formData.append('images', img.file, img.name);
+                });
+
+                const response = await fetch('/api/albums', {
+                  method: 'POST',
+                  body: formData,
+                });
+
+                if (!response.ok) {
+                  if (response.status === 413) {
+                    throw new Error('Upload too large. Try fewer images per upload.');
+                  }
+                  const text = await response.text();
+                  throw new Error(text || 'Failed to create album');
+                }
+
+                const data = await response.json();
+                if (data.status !== 'success') {
+                  throw new Error(data.message || 'Failed to create album');
+                }
+
+                this.albumName = '';
+                this.description = '';
+                this.date = new Date().toISOString().split('T')[0];
+                this.removeAllImages();
+                this.showCreateAlbumForm = false;
+
+                alert(`
                       Album created successfully!
 
                       Album ID: ${data.album_id}
                       Images Processed: ${data.images_processed}
                       Total Time: ${data.timings.total}`);
 
-                    // Reload the page to show the new album
-                    window.location.reload();
-                } else {
-                    throw new Error(data.message || 'Failed to create album');
-                }
-            })
+                window.location.reload();
+                return;
+              }
 
-            .catch(error => {
-                console.error('Error:', error);
-                alert(error.message || 'Failed to create album');
-            })
-            .finally(() => {
-                this.isSubmitting = false;
-            });
-        }
+              const createForm = new FormData();
+              createForm.append('album', albumBlob);
+
+              const createResponse = await fetch('/api/albums', {
+                method: 'POST',
+                body: createForm,
+              });
+
+              if (!createResponse.ok) {
+                if (createResponse.status === 413) {
+                  throw new Error('Upload too large. Try fewer images per upload.');
+                }
+                const text = await createResponse.text();
+                throw new Error(text || 'Failed to create album');
+              }
+
+              const created = await createResponse.json();
+              if (created.status !== 'success') {
+                throw new Error(created.message || 'Failed to create album');
+              }
+
+              const albumId = created.album_id;
+              let imagesProcessed = 0;
+
+              const batches = [];
+              let currentBatch = [];
+              let currentBytes = 0;
+
+              for (const img of this.images) {
+                const size = img?.file?.size || 0;
+                if (
+                  currentBatch.length > 0 &&
+                  (currentBytes + size > maxBatchBytes || currentBatch.length >= maxBatchCount)
+                ) {
+                  batches.push(currentBatch);
+                  currentBatch = [];
+                  currentBytes = 0;
+                }
+                currentBatch.push(img);
+                currentBytes += size;
+              }
+              if (currentBatch.length > 0) {
+                batches.push(currentBatch);
+              }
+
+              for (const batch of batches) {
+                const batchForm = new FormData();
+                batch.forEach(img => batchForm.append('new_images', img.file, img.name));
+
+                const batchResponse = await fetch(`/api/albums/${albumId}`, {
+                  method: 'PUT',
+                  body: batchForm,
+                });
+
+                if (!batchResponse.ok) {
+                  if (batchResponse.status === 413) {
+                    throw new Error('Upload too large. Try fewer images per upload.');
+                  }
+                  const text = await batchResponse.text();
+                  throw new Error(text || 'Failed to upload images');
+                }
+
+                const batchResult = await batchResponse.json();
+                if (batchResult.status !== 'success') {
+                  throw new Error(batchResult.message || 'Failed to upload images');
+                }
+
+                imagesProcessed += batchResult.new_images_added || 0;
+              }
+
+              this.albumName = '';
+              this.description = '';
+              this.date = new Date().toISOString().split('T')[0];
+              this.removeAllImages();
+              this.showCreateAlbumForm = false;
+
+              alert(`
+                      Album created successfully!
+
+                      Album ID: ${albumId}
+                      Images Processed: ${imagesProcessed}`);
+
+              window.location.reload();
+            } catch (error) {
+              console.error('Error:', error);
+              alert(error.message || 'Failed to create album');
+            } finally {
+              this.isSubmitting = false;
+            }
+          }
         }"
       >
         <div class="border-b border-white/10 p-4 sm:p-6">
@@ -550,51 +632,136 @@
             this.images = [];
             this.existingImages = [];
           },
-          handleSubmit() {
+          async handleSubmit() {
             if (this.isSubmitting) return;
             this.isSubmitting = true;
-            const formData = new FormData();
 
-            // album data
-            const albumData = {
-              id: this.albumId,
-              name: this.albumName,
-              description: this.description,
-              date: this.date,
-            };
+            try {
+              const albumData = {
+                id: this.albumId,
+                name: this.albumName,
+                description: this.description,
+                date: this.date,
+              };
 
-            const albumBlob = new Blob([JSON.stringify(albumData)], {
-              type: 'application/json'
-            });
-            formData.append('album', albumBlob);
-            formData.append('deleted_images', this.deletedImages.join(','));
+              const albumBlob = new Blob([JSON.stringify(albumData)], {
+                type: 'application/json'
+              });
 
-            // Append new images
-            this.images.forEach((img, index) => {
-              formData.append('new_images', img.file, img.name);
-            });
+              const totalBytes = this.images.reduce((sum, img) => sum + (img?.file?.size || 0), 0);
+              const isLocal =
+                window.location.hostname === 'localhost' ||
+                window.location.hostname === '127.0.0.1' ||
+                window.location.hostname === '::1';
+              const maxBatchBytes = (isLocal ? 350 : 80) * 1024 * 1024;
+              const maxBatchCount = isLocal ? 120 : 50;
+              const shouldBatch = this.images.length > maxBatchCount || totalBytes > maxBatchBytes;
 
-            fetch(`/api/albums/${this.albumId}`, {
-              method: 'PUT',
-              body: formData,
-            })
-              .then(async response => {
+              if (!shouldBatch) {
+                const formData = new FormData();
+                formData.append('album', albumBlob);
+                formData.append('deleted_images', this.deletedImages.join(','));
+                this.images.forEach(img => formData.append('new_images', img.file, img.name));
+
+                const response = await fetch(`/api/albums/${this.albumId}`, {
+                  method: 'PUT',
+                  body: formData,
+                });
+
+                if (!response.ok) {
+                  if (response.status === 413) {
+                    throw new Error('Upload too large. Try fewer images per upload.');
+                  }
+                  const text = await response.text();
+                  throw new Error(text || 'Failed to update album');
+                }
+
                 const data = await response.json();
-                if (data.status === 'success') {
-                  alert('Album updated successfully!');
-                  this.showEditAlbumForm = false;
-                  window.location.reload();
-                } else {
+                if (data.status !== 'success') {
                   throw new Error(data.message || 'Failed to update album');
                 }
-              })
-              .catch(error => {
-                console.error('Error updating album:', error);
-                alert(error.message || 'Failed to update album');
-              })
-              .finally(() => {
-                this.isSubmitting = false;
+
+                alert('Album updated successfully!');
+                this.showEditAlbumForm = false;
+                window.location.reload();
+                return;
+              }
+
+              const metaForm = new FormData();
+              metaForm.append('album', albumBlob);
+              metaForm.append('deleted_images', this.deletedImages.join(','));
+
+              const metaResponse = await fetch(`/api/albums/${this.albumId}`, {
+                method: 'PUT',
+                body: metaForm,
               });
+
+              if (!metaResponse.ok) {
+                if (metaResponse.status === 413) {
+                  throw new Error('Upload too large. Try fewer images per upload.');
+                }
+                const text = await metaResponse.text();
+                throw new Error(text || 'Failed to update album');
+              }
+
+              const metaResult = await metaResponse.json();
+              if (metaResult.status !== 'success') {
+                throw new Error(metaResult.message || 'Failed to update album');
+              }
+
+              const batches = [];
+              let currentBatch = [];
+              let currentBytes = 0;
+
+              for (const img of this.images) {
+                const size = img?.file?.size || 0;
+                if (
+                  currentBatch.length > 0 &&
+                  (currentBytes + size > maxBatchBytes || currentBatch.length >= maxBatchCount)
+                ) {
+                  batches.push(currentBatch);
+                  currentBatch = [];
+                  currentBytes = 0;
+                }
+                currentBatch.push(img);
+                currentBytes += size;
+              }
+              if (currentBatch.length > 0) {
+                batches.push(currentBatch);
+              }
+
+              for (const batch of batches) {
+                const batchForm = new FormData();
+                batch.forEach(img => batchForm.append('new_images', img.file, img.name));
+
+                const batchResponse = await fetch(`/api/albums/${this.albumId}`, {
+                  method: 'PUT',
+                  body: batchForm,
+                });
+
+                if (!batchResponse.ok) {
+                  if (batchResponse.status === 413) {
+                    throw new Error('Upload too large. Try fewer images per upload.');
+                  }
+                  const text = await batchResponse.text();
+                  throw new Error(text || 'Failed to upload images');
+                }
+
+                const batchResult = await batchResponse.json();
+                if (batchResult.status !== 'success') {
+                  throw new Error(batchResult.message || 'Failed to upload images');
+                }
+              }
+
+              alert('Album updated successfully!');
+              this.showEditAlbumForm = false;
+              window.location.reload();
+            } catch (error) {
+              console.error('Error updating album:', error);
+              alert(error.message || 'Failed to update album');
+            } finally {
+              this.isSubmitting = false;
+            }
           }
         }"
         x-init="init()"
