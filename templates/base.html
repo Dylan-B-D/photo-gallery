@@ -57,8 +57,8 @@
         </script>
         <script src="https://cdn.tailwindcss.com" onload="document.documentElement.style.visibility='visible'; const cloak=document.getElementById('tw-cloak'); if (cloak) cloak.remove();"></script>
     {% else %}
-        <link rel="preload" href="/static/css/tailwind.css" as="style" />
-        <link rel="stylesheet" href="/static/css/tailwind.css" />
+        <link rel="preload" href="/static/css/tailwind.css?v={{ asset_version }}" as="style" />
+        <link rel="stylesheet" href="/static/css/tailwind.css?v={{ asset_version }}" />
     {% endif %}
     
     <style>

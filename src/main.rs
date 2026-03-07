@@ -7,6 +7,7 @@ use handlers::home::home_handler;
 use handlers::login::{login_handler, login_post_handler, logout_handler};
 use std::env;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tower_cookies::CookieManagerLayer;
 use tower_governor::governor::GovernorConfigBuilder;
@@ -46,8 +47,11 @@ async fn main() {
     );
 
     // Create routers for static files and uploads
-    let static_router = Router::new().nest_service("/static", ServeDir::new("static"));
-    let uploads_router = Router::new().nest_service("/uploads", ServeDir::new("uploads"));
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let static_dir = manifest_dir.join("static");
+    let uploads_dir = manifest_dir.join("uploads");
+    let static_router = Router::new().nest_service("/static", ServeDir::new(static_dir));
+    let uploads_router = Router::new().nest_service("/uploads", ServeDir::new(uploads_dir));
 
     // Create the main app router
     let app = Router::new()

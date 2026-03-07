@@ -6,6 +6,7 @@ use sqlx::SqlitePool;
 use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::UNIX_EPOCH;
 use tokio::sync::Mutex as AsyncMutex;
 
 pub const TEMPLATES_DIR: &str = "templates";
@@ -24,6 +25,19 @@ pub fn init_state(pool: SqlitePool) -> Arc<AppState> {
                 "app_env",
                 env::var("APP_ENV").unwrap_or_else(|_| "production".to_string()),
             );
+            let asset_version = env::var("ASSET_VERSION").unwrap_or_else(|_| {
+                let css_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("static")
+                    .join("css")
+                    .join("tailwind.css");
+                std::fs::metadata(&css_path)
+                    .and_then(|m| m.modified())
+                    .ok()
+                    .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs().to_string())
+                    .unwrap_or_else(|| "0".to_string())
+            });
+            env.add_global("asset_version", asset_version);
 
             match auto_reload_mode.as_str() {
                 "1" => notifier.set_fast_reload(true),
@@ -44,6 +58,19 @@ pub fn init_state(pool: SqlitePool) -> Arc<AppState> {
                 "app_env",
                 env::var("APP_ENV").unwrap_or_else(|_| "production".to_string()),
             );
+            let asset_version = env::var("ASSET_VERSION").unwrap_or_else(|_| {
+                let css_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("static")
+                    .join("css")
+                    .join("tailwind.css");
+                std::fs::metadata(&css_path)
+                    .and_then(|m| m.modified())
+                    .ok()
+                    .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs().to_string())
+                    .unwrap_or_else(|| "0".to_string())
+            });
+            env.add_global("asset_version", asset_version);
             Ok(env)
         })))
     };
