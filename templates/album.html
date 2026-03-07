@@ -394,6 +394,7 @@
       margin: 0;
     }
     input.no-spinner {
+      appearance: none;
       -moz-appearance: textfield;
     }
   </style>
@@ -789,6 +790,34 @@
         }
       }
     }
+  </script>
+  <button
+    id="jumpTopAlbum"
+    type="button"
+    class="fixed bottom-6 right-6 z-40 hidden h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-black/40 text-white/90 backdrop-blur-md transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#34D399]"
+    aria-label="Jump to top"
+  >
+    <i class="fas fa-arrow-up"></i>
+  </button>
+  <script>
+    (() => {
+      const button = document.getElementById("jumpTopAlbum");
+      if (!button) return;
+
+      const toggle = () => {
+        if (window.scrollY > 320) {
+          button.classList.remove("hidden");
+          button.classList.add("inline-flex");
+        } else {
+          button.classList.add("hidden");
+          button.classList.remove("inline-flex");
+        }
+      };
+
+      toggle();
+      window.addEventListener("scroll", toggle, { passive: true });
+      button.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
+    })();
   </script>
 </div>
 {% endblock %}
