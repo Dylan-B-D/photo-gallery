@@ -1,46 +1,33 @@
 {% extends "base.html" %} 
 
-{% block body_class %}no-title{% endblock %}
+{% block title %}Admin Dashboard - Photo Gallery{% endblock %}
 
-{% block title %}Admin Dashboard - Photo Gallery{% endblock %} {% block content %}
+{% block nav_title %}Admin <span class="text-emerald-400">Dashboard</span>{% endblock %}
+
+{% block nav_items %}
+<a href="/" class="inline-flex items-center gap-2 rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm font-semibold text-white/80 backdrop-blur-xs hover:bg-white/10 hover:text-white focus:outline-none">
+  <i class="fas fa-arrow-left text-white/80"></i>
+  <span>Home</span>
+</a>
+<button type="button" onclick="window.dispatchEvent(new Event('pg-open-create-album'))" class="inline-flex items-center gap-2 rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm font-semibold text-white/80 backdrop-blur-xs hover:bg-white/10 hover:text-white focus:outline-none">
+  <i class="fas fa-plus text-emerald-300/90"></i>
+  <span>New Album</span>
+</button>
+<a href="/logout" class="inline-flex items-center gap-2 rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm font-semibold text-red-200/90 backdrop-blur-xs hover:bg-white/10 hover:text-white focus:outline-none">
+  <i class="fas fa-sign-out-alt"></i>
+  <span>Logout</span>
+</a>
+{% endblock %}
+
+{% block content %}
 <div x-data="{ 
   showCreateAlbumForm: false, 
   showEditAlbumForm: false, 
   editingAlbum: null 
-}" class="h-full">
-  {# Navigation section with flexbox layout #}
-  <div class="flex flex-col md:flex-row justify-between items-center py-4 relative">
-    <!-- Home button -->
-    <a
-      href="/"
-      class="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-white hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#34D399]"
-    >
-      <i class="fas fa-arrow-left"></i> Home
-    </a>
-  
-    <!-- Centered title -->
-    <h1 class="text-center text-white font-merienda text-3xl font-bold md:absolute md:left-1/2 md:transform md:-translate-x-1/2 mt-4 md:mt-0">
-      Admin Dashboard
-    </h1>
-  
-    <!-- Right-side buttons -->
-    <div class="flex items-center mt-4 md:mt-0">
-      <button
-        @click="showCreateAlbumForm = true"
-        class="ml-4 inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-white hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#34D399]"
-      >
-        <i class="fas fa-plus text-emerald-400"></i>
-        <span>New Album</span>
-      </button>
-      <a
-        href="/logout"
-        class="ml-4 inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-red-200/90 hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#34D399]"
-      >
-        <i class="fas fa-sign-out-alt"></i>
-        <span>Logout</span>
-      </a>
-    </div>
-  </div>
+}"
+  x-init="window.addEventListener('pg-open-create-album', () => { showCreateAlbumForm = true })"
+  class="h-full"
+>
   {# Modal template #}
   <template x-if="showCreateAlbumForm">
     <div

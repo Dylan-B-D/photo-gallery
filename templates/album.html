@@ -17,7 +17,7 @@
         <div class="col-span-6 sm:col-span-3 flex justify-start">
           <div class="w-full sm:max-w-[260px]">
             <a href="/" class="w-full inline-flex items-center justify-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-semibold text-white hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#34D399]">
-              <i class="fas fa-arrow-left"></i>
+              <i class="fas fa-home text-[13px] text-emerald-300/90"></i>
               <span>Home</span>
             </a>
 
@@ -70,8 +70,8 @@
               @click="startSlideshow()"
               class="w-full inline-flex items-center justify-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-semibold text-white hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#34D399]"
             >
+              <i class="fas fa-play text-[13px] text-emerald-300/90"></i>
               <span>Slideshow</span>
-              <i class="fas fa-play text-emerald-400"></i>
             </button>
 
             <div class="mt-1.5 overflow-hidden rounded-md border border-white/10 bg-zinc-950/30 divide-y divide-white/10">
@@ -94,10 +94,10 @@
 
             {% if next_album or prev_album %}
             <div class="mt-1.5 overflow-hidden rounded-md border border-white/10 bg-white/5">
-              <div class="flex w-full">
+              <div class="flex justify-center">
                 {% if next_album %}
-                <a href="/albums/{{ next_album }}" class="inline-flex flex-1 items-center justify-center gap-2 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-white/10">
-                  <i class="fas fa-arrow-left text-emerald-400"></i>
+                <a href="/albums/{{ next_album }}" class="inline-flex items-center justify-center gap-2 px-4 py-1.5 text-[12px] font-semibold text-white hover:bg-white/10 whitespace-nowrap">
+                  <i class="fas fa-arrow-right text-[13px] text-emerald-300/90"></i>
                   <span>Next</span>
                 </a>
                 {% endif %}
@@ -105,9 +105,9 @@
                 <span class="w-px bg-white/10"></span>
                 {% endif %}
                 {% if prev_album %}
-                <a href="/albums/{{ prev_album }}" class="inline-flex flex-1 items-center justify-center gap-2 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-white/10">
+                <a href="/albums/{{ prev_album }}" class="inline-flex items-center justify-center gap-2 px-4 py-1.5 text-[12px] font-semibold text-white hover:bg-white/10 whitespace-nowrap">
+                  <i class="fas fa-arrow-left text-[13px] text-emerald-300/90"></i>
                   <span>Previous</span>
-                  <i class="fas fa-arrow-right text-emerald-400"></i>
                 </a>
                 {% endif %}
               </div>
