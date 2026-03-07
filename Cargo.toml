@@ -3,6 +3,7 @@ name = "photo-gallery"
 version = "0.1.0"
 edition = "2021"
 default-run = "photo-gallery"
+build = "build.rs"
 
 [dependencies]
 minijinja = { version = "2.7.0", features = ["loader"] }

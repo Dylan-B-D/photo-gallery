@@ -1,5 +1,6 @@
 use crate::auth::middleware::is_authenticated;
 use crate::types::{AppState, Claims};
+use argon2::Argon2;
 use argon2::{PasswordHash, PasswordVerifier};
 use axum::http::{header, StatusCode};
 use axum::{
@@ -7,7 +8,6 @@ use axum::{
     response::{Html, Redirect, Response},
     Form,
 };
-use argon2::Argon2;
 use jsonwebtoken::{encode, EncodingKey, Header};
 use minijinja::context;
 use serde::Deserialize;
@@ -120,10 +120,7 @@ pub async fn login_post_handler(
 }
 
 /// Handles logout by removing the auth_token cookie and redirecting to the login page.
-pub async fn logout_handler(
-    State(_state): State<Arc<AppState>>,
-    cookies: Cookies,
-) -> Redirect {
+pub async fn logout_handler(State(_state): State<Arc<AppState>>, cookies: Cookies) -> Redirect {
     // Remove the auth_token cookie
     cookies.remove(Cookie::build("auth_token").build());
     // Redirect to the login page

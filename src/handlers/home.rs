@@ -11,9 +11,10 @@ pub async fn home_handler(State(state): State<Arc<AppState>>) -> Html<String> {
     let reloader_guard = state.reloader.lock().await;
     let env = reloader_guard.acquire_env().unwrap();
     let tmpl = env.get_template("home.html").unwrap();
-    let rendered = tmpl.render(context! {
-        albums => albums,
-    })
-    .unwrap();
+    let rendered = tmpl
+        .render(context! {
+            albums => albums,
+        })
+        .unwrap();
     Html(rendered)
 }

@@ -1,4 +1,7 @@
-use argon2::{Argon2, PasswordHasher, password_hash::{SaltString, rand_core::OsRng}};
+use argon2::{
+    password_hash::{rand_core::OsRng, SaltString},
+    Argon2, PasswordHasher,
+};
 use std::io::{self, Write};
 
 fn main() {

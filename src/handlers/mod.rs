@@ -1,4 +1,4 @@
-pub mod home;
 pub mod admin;
-pub mod login;
 pub mod album;
+pub mod home;
+pub mod login;

@@ -119,10 +119,14 @@ pub fn extract_exif_metadata(data: &[u8]) -> Option<ExifMetadata> {
                     ExifTag::LensModel => lens_model = Some(entry.value_more_readable.clone()),
                     ExifTag::ISOSpeedRatings => iso = Some(entry.value_more_readable.clone()),
                     ExifTag::FNumber => aperture = Some(entry.value_more_readable.clone()),
-                    ExifTag::ExposureTime => shutter_speed = Some(entry.value_more_readable.clone()),
+                    ExifTag::ExposureTime => {
+                        shutter_speed = Some(entry.value_more_readable.clone())
+                    }
                     ExifTag::FocalLength => focal_length = Some(entry.value_more_readable.clone()),
                     ExifTag::LightSource => light_source = Some(entry.value_more_readable.clone()),
-                    ExifTag::DateTimeOriginal => date_created = Some(entry.value_more_readable.clone()),
+                    ExifTag::DateTimeOriginal => {
+                        date_created = Some(entry.value_more_readable.clone())
+                    }
                     _ => {}
                 }
             }
@@ -184,8 +188,16 @@ pub async fn process_image(data: Vec<u8>) -> Result<ProcessedImage, Box<dyn Erro
                 .ok_or("Failed to create thumbnail RGB image")?;
 
         // Compress using turbojpeg
-        let optimized = turbojpeg::compress_image(&optimized_rgb, OPTIMIZED_QUALITY, turbojpeg::Subsamp::Sub2x2)?;
-        let thumbnail = turbojpeg::compress_image(&thumbnail_rgb, THUMBNAIL_QUALITY, turbojpeg::Subsamp::Sub2x2)?;
+        let optimized = turbojpeg::compress_image(
+            &optimized_rgb,
+            OPTIMIZED_QUALITY,
+            turbojpeg::Subsamp::Sub2x2,
+        )?;
+        let thumbnail = turbojpeg::compress_image(
+            &thumbnail_rgb,
+            THUMBNAIL_QUALITY,
+            turbojpeg::Subsamp::Sub2x2,
+        )?;
 
         Ok(ProcessedImage {
             optimized: optimized.to_vec(),
@@ -308,10 +320,7 @@ pub async fn extract_multipart_fields(
                     match serde_json::from_slice(&bytes) {
                         Ok(data) => album_data = Some(data),
                         Err(_) => {
-                            return Err((
-                                StatusCode::BAD_REQUEST,
-                                "Invalid album data format",
-                            )
+                            return Err((StatusCode::BAD_REQUEST, "Invalid album data format")
                                 .into_response())
                         }
                     }

@@ -120,7 +120,6 @@ pub async fn update_album_metadata(pool: &SqlitePool, album_id: i64) -> Result<(
     Ok(())
 }
 
-
 pub async fn get_albums_with_oldest_image(
     pool: &SqlitePool,
 ) -> Result<Vec<(Album, Option<String>, i64)>, sqlx::Error> {
@@ -297,12 +296,12 @@ pub async fn delete_album(pool: &SqlitePool, album_id: i64) -> Result<(), sqlx::
     sqlx::query!("DELETE FROM images WHERE album_id = ?", album_id)
         .execute(pool)
         .await?;
-        
+
     // Then delete the album
     sqlx::query!("DELETE FROM albums WHERE id = ?", album_id)
         .execute(pool)
         .await?;
-        
+
     Ok(())
 }
 

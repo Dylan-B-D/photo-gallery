@@ -11,10 +11,9 @@ use std::sync::Arc;
 use tower_cookies::CookieManagerLayer;
 use tower_governor::governor::GovernorConfigBuilder;
 use tower_governor::GovernorLayer;
+use tower_http::compression::{CompressionLayer, CompressionLevel};
 use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::services::ServeDir;
-use tower_http::compression::{CompressionLayer, CompressionLevel};
-
 
 mod auth;
 mod db;
@@ -76,7 +75,7 @@ async fn main() {
                 .gzip(true)
                 .br(true)
                 .deflate(true)
-                .quality(CompressionLevel::Default)
+                .quality(CompressionLevel::Default),
         )
         .layer(CookieManagerLayer::new())
         .layer(GovernorLayer {
