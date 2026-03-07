@@ -185,7 +185,7 @@
           </div>
 
           <div class="absolute inset-x-0 bottom-0 p-3">
-            <div class="rounded-md border border-white/10 bg-black/60 backdrop-blur-sm px-3 py-2">
+            <div class="rounded-md border border-white/10 bg-black/60 backdrop-blur-sm px-3 py-1">
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0 flex-1">
                   <h2 class="font-merienda text-[15px] font-semibold leading-tight text-white truncate" x-text="album[0].name"></h2>
@@ -193,21 +193,24 @@
 
                 <div class="shrink-0 text-right text-[12px] text-gray-200/80">
                   <div class="leading-tight" x-text="formatDate(album[0].date)"></div>
-                  <div class="mt-0.5 inline-flex items-center justify-end gap-1 leading-tight">
-                    <i class="fas fa-images text-gray-200/80"></i>
-                    <span x-text="album[0].num_images"></span>
-                  </div>
                 </div>
               </div>
 
-              <div class="mt-2 border-t border-white/10 pt-2">
-              <div class="flex items-center justify-center gap-2 overflow-hidden whitespace-nowrap text-[12px] text-gray-200/80" x-show="album[0].camera_model || album[0].lens_model">
+              <div class="mt-1 flex items-center">
+                <span class="h-px flex-1 bg-white/10"></span>
+                <span class="mx-2 inline-flex items-center gap-1 px-0.5 text-[11px] font-semibold text-gray-200/80">
+                  <i class="fas fa-images text-[11px] text-emerald-200/80"></i>
+                  <span x-text="album[0].num_images"></span>
+                </span>
+                <span class="h-px flex-1 bg-white/10"></span>
+              </div>
+
+              <div class="mt-1 flex items-center justify-center gap-2 overflow-hidden whitespace-nowrap text-[12px] text-gray-200/80" x-show="album[0].camera_model || album[0].lens_model">
                 <span class="min-w-0 truncate" x-show="album[0].camera_model" x-text="truncate(album[0].camera_model, 28)"></span>
                 <template x-if="album[0].camera_model && album[0].lens_model">
                   <span class="h-3 w-px shrink-0 bg-white/15"></span>
                 </template>
                 <span class="min-w-0 truncate" x-show="album[0].lens_model" x-text="truncate(album[0].lens_model, 28)"></span>
-              </div>
               </div>
             </div>
           </div>
