@@ -159,6 +159,7 @@
       <div
         class="relative flex h-full w-full items-center justify-center overflow-hidden"
         x-ref="lightboxViewport"
+        :class="lightboxZoom > 1 ? (lightboxIsPanning ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-zoom-in'"
         @wheel.prevent="onLightboxWheel($event)"
         @pointermove.window="onLightboxPointerMove($event)"
         @pointerup.window="endLightboxPan()"
@@ -172,11 +173,11 @@
           x-transition:enter="transition-opacity duration-700"
           x-transition:enter-start="opacity-0"
           x-transition:enter-end="opacity-100"
-          :class="isSlideshow ? 'cursor-default' : (lightboxZoom > 1 ? 'cursor-zoom-out' : 'cursor-zoom-in')"
+          :class="lightboxZoom > 1 ? (lightboxIsPanning ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-zoom-in'"
           :style="lightboxImageStyle()"
           class="max-h-screen max-w-screen object-contain select-none will-change-transform"
           draggable="false"
-          @click.stop="toggleLightboxZoom()"
+          @click.stop="toggleLightboxZoom($event)"
           @pointerdown="startLightboxPan($event)"
         >
         <!-- Preload Next/Previous Images (hidden) -->
@@ -397,6 +398,12 @@
       appearance: none;
       -moz-appearance: textfield;
     }
+    .cursor-grab {
+      cursor: grab;
+    }
+    .cursor-grabbing {
+      cursor: grabbing;
+    }
   </style>
 
   <!-- Alpine Component Script -->
@@ -425,7 +432,7 @@
         lightboxPanBaseX: 0,
         lightboxPanBaseY: 0,
         lightboxPanMoved: false,
-        lightboxMaxZoom: 4,
+        lightboxMaxZoom: 8,
 
         init() {
           try {
@@ -554,9 +561,40 @@
           this.lightboxPanY = Math.max(-maxY, Math.min(maxY, this.lightboxPanY));
         },
 
-        setLightboxZoom(nextZoom) {
-          if (this.isSlideshow) return;
+        getLightboxViewportCenter() {
+          const viewport = this.$refs.lightboxViewport;
+          if (!viewport) return null;
+          const rect = viewport.getBoundingClientRect();
+          return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+        },
 
+        setLightboxZoomAt(nextZoom, clientX, clientY) {
+          const viewport = this.$refs.lightboxViewport;
+          if (!viewport) return;
+
+          const rect = viewport.getBoundingClientRect();
+          const centerX = rect.left + rect.width / 2;
+          const centerY = rect.top + rect.height / 2;
+
+          const currentZoom = this.lightboxZoom;
+          const z = Math.max(1, Math.min(this.lightboxMaxZoom, nextZoom));
+
+          if (z <= 1.02) {
+            this.resetLightboxZoom();
+            return;
+          }
+
+          const px = clientX - centerX;
+          const py = clientY - centerY;
+
+          const ratio = z / currentZoom;
+          this.lightboxPanX = this.lightboxPanX * ratio + px * (1 - ratio);
+          this.lightboxPanY = this.lightboxPanY * ratio + py * (1 - ratio);
+          this.lightboxZoom = z;
+          this.clampLightboxPan();
+        },
+
+        setLightboxZoom(nextZoom) {
           const z = Math.max(1, Math.min(this.lightboxMaxZoom, nextZoom));
           this.lightboxZoom = z;
           if (this.lightboxZoom === 1) {
@@ -568,7 +606,9 @@
         },
 
         zoomInLightbox() {
-          this.setLightboxZoom(this.lightboxZoom * 1.25);
+          const center = this.getLightboxViewportCenter();
+          if (!center) return;
+          this.setLightboxZoomAt(this.lightboxZoom * 1.25, center.x, center.y);
         },
 
         zoomOutLightbox() {
@@ -577,31 +617,31 @@
             this.resetLightboxZoom();
             return;
           }
-          this.setLightboxZoom(next);
+          const center = this.getLightboxViewportCenter();
+          if (!center) return;
+          this.setLightboxZoomAt(next, center.x, center.y);
         },
 
-        toggleLightboxZoom() {
-          if (this.isSlideshow) return;
+        toggleLightboxZoom(event) {
           if (this.lightboxIsPanning || this.lightboxPanMoved) return;
           if (this.lightboxZoom <= 1) {
-            this.setLightboxZoom(2);
+            const center = this.getLightboxViewportCenter();
+            const x = event?.clientX ?? center?.x ?? 0;
+            const y = event?.clientY ?? center?.y ?? 0;
+            this.setLightboxZoomAt(2, x, y);
           } else {
             this.resetLightboxZoom();
           }
         },
 
         onLightboxWheel(event) {
-          if (this.isSlideshow) return;
           this.showControls();
-          if (event.deltaY < 0) {
-            this.zoomInLightbox();
-          } else if (event.deltaY > 0) {
-            this.zoomOutLightbox();
-          }
+          const base = 1.12;
+          const factor = event.deltaY < 0 ? base : 1 / base;
+          this.setLightboxZoomAt(this.lightboxZoom * factor, event.clientX, event.clientY);
         },
 
         startLightboxPan(event) {
-          if (this.isSlideshow) return;
           if (this.lightboxZoom <= 1) return;
 
           this.lightboxIsPanning = true;
@@ -794,7 +834,7 @@
   <button
     id="jumpTopAlbum"
     type="button"
-    class="fixed bottom-6 right-6 z-40 hidden h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-black/40 text-white/90 backdrop-blur-md transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#34D399]"
+    class="fixed bottom-6 right-6 z-40 hidden h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/55 text-white shadow-lg shadow-black/50 backdrop-blur-md transition hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-[#34D399]"
     aria-label="Jump to top"
   >
     <i class="fas fa-arrow-up"></i>
@@ -804,18 +844,45 @@
       const button = document.getElementById("jumpTopAlbum");
       if (!button) return;
 
+      document.body.appendChild(button);
+      button.classList.remove("hidden");
+      button.style.position = "fixed";
+      button.style.right = "24px";
+      button.style.bottom = "24px";
+      button.style.zIndex = "9999";
+      button.style.display = "none";
+
+      let lastScrollTarget = null;
+      const getScrollTop = () => {
+        const scrollingElement = document.scrollingElement;
+        const docTop = scrollingElement ? scrollingElement.scrollTop : 0;
+        const targetTop =
+          lastScrollTarget && lastScrollTarget !== document && lastScrollTarget !== window
+            ? lastScrollTarget.scrollTop || 0
+            : 0;
+        return Math.max(docTop, targetTop);
+      };
+
       const toggle = () => {
-        if (window.scrollY > 320) {
-          button.classList.remove("hidden");
-          button.classList.add("inline-flex");
-        } else {
-          button.classList.add("hidden");
-          button.classList.remove("inline-flex");
+        if (getScrollTop() > 160) {
+          button.style.display = "inline-flex";
+          return;
         }
+
+        button.style.display = "none";
       };
 
       toggle();
       window.addEventListener("scroll", toggle, { passive: true });
+      document.addEventListener(
+        "scroll",
+        (event) => {
+          lastScrollTarget = event.target;
+          toggle();
+        },
+        { passive: true, capture: true }
+      );
+      window.addEventListener("resize", toggle, { passive: true });
       button.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
     })();
   </script>

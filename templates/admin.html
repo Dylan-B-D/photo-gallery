@@ -1140,7 +1140,7 @@
   <button
     id="jumpTopAdmin"
     type="button"
-    class="fixed bottom-6 right-6 z-50 hidden h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-black/40 text-white/90 backdrop-blur-md transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#34D399]"
+    class="fixed bottom-6 right-6 z-50 hidden h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/55 text-white shadow-lg shadow-black/50 backdrop-blur-md transition hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-[#34D399]"
     aria-label="Jump to top"
   >
     <i class="fas fa-arrow-up"></i>
@@ -1172,18 +1172,45 @@
       const button = document.getElementById("jumpTopAdmin");
       if (!button) return;
 
+      document.body.appendChild(button);
+      button.classList.remove("hidden");
+      button.style.position = "fixed";
+      button.style.right = "24px";
+      button.style.bottom = "24px";
+      button.style.zIndex = "9999";
+      button.style.display = "none";
+
+      let lastScrollTarget = null;
+      const getScrollTop = () => {
+        const scrollingElement = document.scrollingElement;
+        const docTop = scrollingElement ? scrollingElement.scrollTop : 0;
+        const targetTop =
+          lastScrollTarget && lastScrollTarget !== document && lastScrollTarget !== window
+            ? lastScrollTarget.scrollTop || 0
+            : 0;
+        return Math.max(docTop, targetTop);
+      };
+
       const toggle = () => {
-        if (window.scrollY > 320) {
-          button.classList.remove("hidden");
-          button.classList.add("inline-flex");
-        } else {
-          button.classList.add("hidden");
-          button.classList.remove("inline-flex");
+        if (getScrollTop() > 160) {
+          button.style.display = "inline-flex";
+          return;
         }
+
+        button.style.display = "none";
       };
 
       toggle();
       window.addEventListener("scroll", toggle, { passive: true });
+      document.addEventListener(
+        "scroll",
+        (event) => {
+          lastScrollTarget = event.target;
+          toggle();
+        },
+        { passive: true, capture: true }
+      );
+      window.addEventListener("resize", toggle, { passive: true });
       button.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
     })();
     </script>
