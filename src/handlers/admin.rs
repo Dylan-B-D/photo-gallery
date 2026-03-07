@@ -11,17 +11,14 @@ use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 use tower_cookies::Cookies;
 
-pub struct ProcessedImage {
-    pub optimized: Vec<u8>,
-    pub thumbnail: Vec<u8>,
-    pub original_size: usize,
-}
-
 use crate::{
     auth::middleware::require_auth,
     db::{self, create_album, update_album_metadata},
     types::{AppState, CreateAlbumRequest},
-    utils::{create_album_directory, delete_album_directory, process_and_save_image, ImageQuality},
+    utils::{
+        create_album_directory, delete_album_directory, process_and_save_image, ImageQuality,
+        SavedImage,
+    },
 };
 
 pub async fn admin_handler(
@@ -84,12 +81,14 @@ pub async fn create_album_handler(
         .unwrap_or(default_concurrency);
 
     let semaphore = Arc::new(Semaphore::new(concurrency));
-    let mut join_set: JoinSet<Result<(), Box<dyn std::error::Error + Send + Sync>>> =
+    let mut join_set: JoinSet<Result<SavedImage, Box<dyn std::error::Error + Send + Sync>>> =
         JoinSet::new();
 
     let start_multipart = Instant::now();
     let mut album_id: Option<i64> = None;
     let mut album_creation_duration = None;
+    let mut cover_name: Option<String> = None;
+    let mut cover_size: Option<usize> = None;
 
     while let Ok(Some(mut field)) = multipart.next_field().await {
         let field_name = field.name().unwrap_or("");
@@ -128,6 +127,22 @@ pub async fn create_album_handler(
                 album_creation_duration = Some(start_album_creation.elapsed());
                 album_id = Some(created_album_id);
             }
+            "cover_name" => {
+                if let Ok(bytes) = field.bytes().await {
+                    let s = String::from_utf8_lossy(&bytes).trim().to_string();
+                    if !s.is_empty() {
+                        cover_name = Some(s);
+                    }
+                }
+            }
+            "cover_size" => {
+                if let Ok(bytes) = field.bytes().await {
+                    let s = String::from_utf8_lossy(&bytes).trim().to_string();
+                    if let Ok(size) = s.parse::<usize>() {
+                        cover_size = Some(size);
+                    }
+                }
+            }
             "images" => {
                 let current_album_id = match album_id {
                     Some(id) => id,
@@ -157,8 +172,14 @@ pub async fn create_album_handler(
                 let state = state.clone();
                 join_set.spawn(async move {
                     let _permit = permit;
-                    process_and_save_image(state, current_album_id, original_filename, file_bytes)
-                        .await
+                    let saved = process_and_save_image(
+                        state.clone(),
+                        current_album_id,
+                        original_filename,
+                        file_bytes,
+                    )
+                    .await?;
+                    Ok(saved)
                 });
             }
             _ => {}
@@ -174,13 +195,28 @@ pub async fn create_album_handler(
 
     let start_image_processing = Instant::now();
     let mut processed_images = 0usize;
+    let mut saved_images: Vec<SavedImage> = Vec::new();
     while let Some(result) = join_set.join_next().await {
         match result {
-            Ok(Ok(())) => processed_images += 1,
+            Ok(Ok(saved)) => {
+                processed_images += 1;
+                saved_images.push(saved);
+            }
             Ok(Err(e)) => {
                 return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
             }
             Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+        }
+    }
+
+    if let (Some(cover_name), Some(cover_size)) = (cover_name.as_deref(), cover_size) {
+        if let Some(saved) = saved_images
+            .iter()
+            .find(|img| img.original_filename == cover_name && img.original_size == cover_size)
+        {
+            if let Err(e) = db::set_album_cover(&state.pool, album_id, Some(saved.id)).await {
+                return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
+            }
         }
     }
 
@@ -238,11 +274,14 @@ pub async fn update_album_handler(
         .unwrap_or(default_concurrency);
 
     let semaphore = Arc::new(Semaphore::new(concurrency));
-    let mut join_set: JoinSet<Result<(), Box<dyn std::error::Error + Send + Sync>>> =
+    let mut join_set: JoinSet<Result<SavedImage, Box<dyn std::error::Error + Send + Sync>>> =
         JoinSet::new();
 
     let mut album_data: Option<CreateAlbumRequest> = None;
     let mut deleted_image_ids: Vec<i64> = Vec::new();
+    let mut cover_image_id: Option<i64> = None;
+    let mut cover_name: Option<String> = None;
+    let mut cover_size: Option<usize> = None;
 
     while let Ok(Some(mut field)) = multipart.next_field().await {
         let field_name = field.name().unwrap_or("");
@@ -273,6 +312,30 @@ pub async fn update_album_handler(
                         .collect();
                 }
             }
+            "cover_image_id" => {
+                if let Ok(bytes) = field.bytes().await {
+                    let s = String::from_utf8_lossy(&bytes).trim().to_string();
+                    if let Ok(id) = s.parse::<i64>() {
+                        cover_image_id = Some(id);
+                    }
+                }
+            }
+            "cover_name" => {
+                if let Ok(bytes) = field.bytes().await {
+                    let s = String::from_utf8_lossy(&bytes).trim().to_string();
+                    if !s.is_empty() {
+                        cover_name = Some(s);
+                    }
+                }
+            }
+            "cover_size" => {
+                if let Ok(bytes) = field.bytes().await {
+                    let s = String::from_utf8_lossy(&bytes).trim().to_string();
+                    if let Ok(size) = s.parse::<usize>() {
+                        cover_size = Some(size);
+                    }
+                }
+            }
             "new_images" => {
                 let permit = match semaphore.clone().acquire_owned().await {
                     Ok(p) => p,
@@ -297,10 +360,23 @@ pub async fn update_album_handler(
                 let state = state.clone();
                 join_set.spawn(async move {
                     let _permit = permit;
-                    process_and_save_image(state, album_id, original_filename, file_bytes).await
+                    let saved = process_and_save_image(
+                        state.clone(),
+                        album_id,
+                        original_filename,
+                        file_bytes,
+                    )
+                    .await?;
+                    Ok(saved)
                 });
             }
             _ => {}
+        }
+    }
+
+    if cover_image_id.is_some() {
+        if let Err(e) = db::set_album_cover(&state.pool, album_id, cover_image_id).await {
+            return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
         }
     }
 
@@ -324,6 +400,13 @@ pub async fn update_album_handler(
     for image_id in deleted_image_ids {
         match db::get_image(&state.pool, image_id).await {
             Ok(Some(image)) => {
+                if let Err(e) = db::clear_cover_for_image(&state.pool, image_id).await {
+                    eprintln!(
+                        "Failed to clear cover image reference for {}: {}",
+                        image_id, e
+                    );
+                }
+
                 // Delete from database
                 if let Err(e) = db::delete_image(&state.pool, image_id).await {
                     eprintln!("Failed to delete image {}: {}", image_id, e);
@@ -356,13 +439,30 @@ pub async fn update_album_handler(
     }
 
     let mut processed_images = 0usize;
+    let mut saved_images: Vec<SavedImage> = Vec::new();
     while let Some(result) = join_set.join_next().await {
         match result {
-            Ok(Ok(())) => processed_images += 1,
+            Ok(Ok(saved)) => {
+                processed_images += 1;
+                saved_images.push(saved);
+            }
             Ok(Err(e)) => {
                 return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
             }
             Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+        }
+    }
+
+    if cover_image_id.is_none() {
+        if let (Some(cover_name), Some(cover_size)) = (cover_name.as_deref(), cover_size) {
+            if let Some(saved) = saved_images
+                .iter()
+                .find(|img| img.original_filename == cover_name && img.original_size == cover_size)
+            {
+                if let Err(e) = db::set_album_cover(&state.pool, album_id, Some(saved.id)).await {
+                    return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
+                }
+            }
         }
     }
 
@@ -423,6 +523,13 @@ pub async fn delete_image_handler(
         Ok(None) => return (StatusCode::NOT_FOUND, "Image not found").into_response(),
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     };
+
+    if let Err(e) = db::clear_cover_for_image(&state.pool, image_id).await {
+        eprintln!(
+            "Failed to clear cover image reference for {}: {}",
+            image_id, e
+        );
+    }
 
     // Delete from database
     if let Err(e) = db::delete_image(&state.pool, image_id).await {

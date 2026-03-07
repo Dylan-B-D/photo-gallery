@@ -33,6 +33,7 @@ pub struct Album {
     pub camera_model: Option<String>,
     pub lens_model: Option<String>,
     pub aperture: Option<String>,
+    pub cover_image_id: Option<i64>,
 }
 
 #[derive(Debug, Serialize)]

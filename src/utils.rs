@@ -11,11 +11,22 @@ use tokio::{fs, task};
 use uuid::Uuid;
 
 use crate::db::{create_image, CreateImageParams};
-use crate::handlers::admin::ProcessedImage;
 use crate::types::AppState;
 
 fn uploads_base_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("uploads")
+}
+
+pub struct ProcessedImage {
+    pub optimized: Vec<u8>,
+    pub thumbnail: Vec<u8>,
+    pub original_size: usize,
+}
+
+pub struct SavedImage {
+    pub id: i64,
+    pub original_filename: String,
+    pub original_size: usize,
 }
 
 pub struct ExifMetadata {
@@ -254,7 +265,8 @@ pub async fn process_and_save_image(
     album_id: i64,
     original_filename: String,
     data: Vec<u8>,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
+) -> Result<SavedImage, Box<dyn Error + Send + Sync>> {
+    let original_size = data.len();
     let filename = generate_unique_filename(&original_filename);
 
     let metadata = extract_exif_metadata(&data).unwrap_or_else(ExifMetadata::unknown);
@@ -277,7 +289,7 @@ pub async fn process_and_save_image(
     );
     tokio::try_join!(save_optimized, save_thumbnail)?;
 
-    create_image(
+    let image_id = create_image(
         &state.pool,
         CreateImageParams {
             album_id,
@@ -296,5 +308,9 @@ pub async fn process_and_save_image(
     )
     .await?;
 
-    Ok(())
+    Ok(SavedImage {
+        id: image_id,
+        original_filename,
+        original_size,
+    })
 }

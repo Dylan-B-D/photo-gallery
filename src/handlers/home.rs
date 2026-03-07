@@ -7,6 +7,7 @@ pub async fn home_handler(State(state): State<Arc<AppState>>) -> Html<String> {
     let albums = get_albums_with_oldest_image(&state.pool)
         .await
         .unwrap_or_default();
+    let albums_json = serde_json::to_string(&albums).unwrap_or_else(|_| "[]".to_string());
 
     let reloader_guard = state.reloader.lock().await;
     let env = reloader_guard.acquire_env().unwrap();
@@ -14,6 +15,7 @@ pub async fn home_handler(State(state): State<Arc<AppState>>) -> Html<String> {
     let rendered = tmpl
         .render(context! {
             albums => albums,
+            albums_json => albums_json,
         })
         .unwrap();
     Html(rendered)

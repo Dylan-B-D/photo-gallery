@@ -1,4 +1,5 @@
 use crate::types::{Album, CreateAlbumRequest, Image};
+use sqlx::Row;
 use sqlx::SqlitePool;
 
 pub async fn create_album(
@@ -123,21 +124,7 @@ pub async fn update_album_metadata(pool: &SqlitePool, album_id: i64) -> Result<(
 pub async fn get_albums_with_oldest_image(
     pool: &SqlitePool,
 ) -> Result<Vec<(Album, Option<String>, i64)>, sqlx::Error> {
-    #[derive(sqlx::FromRow)]
-    struct AlbumWithImage {
-        id: i64,
-        name: String,
-        description: Option<String>,
-        date: String,
-        num_images: Option<i64>,
-        camera_model: Option<String>,
-        lens_model: Option<String>,
-        aperture: Option<String>,
-        oldest_image: Option<String>,
-    }
-
-    let results = sqlx::query_as!(
-        AlbumWithImage,
+    let results = sqlx::query(
         r#"
         SELECT 
             a.id, 
@@ -148,13 +135,17 @@ pub async fn get_albums_with_oldest_image(
             a.camera_model, 
             a.lens_model, 
             a.aperture,
-            (
-                SELECT i.filename
-                FROM images i
-                WHERE i.album_id = a.id
-                ORDER BY i.date_created ASC
-                LIMIT 1
-            ) as oldest_image
+            a.cover_image_id,
+            COALESCE(
+                (SELECT i.filename FROM images i WHERE i.id = a.cover_image_id),
+                (
+                    SELECT i.filename
+                    FROM images i
+                    WHERE i.album_id = a.id
+                    ORDER BY i.date_created ASC
+                    LIMIT 1
+                )
+            ) AS cover_image
         FROM albums a
         ORDER BY a.date DESC
         "#,
@@ -163,20 +154,27 @@ pub async fn get_albums_with_oldest_image(
     .await?;
 
     let mut albums_with_size = Vec::new();
-    for result in results {
-        let album_size = get_album_size(pool, result.id).await?;
+    for row in results {
+        let album_id: i64 = row.try_get("id")?;
+        let album_size = get_album_size(pool, album_id).await?;
+
+        let num_images: Option<i64> = row.try_get("num_images")?;
+        let cover_image_id: Option<i64> = row.try_get("cover_image_id")?;
+        let cover_image: Option<String> = row.try_get("cover_image")?;
+
         albums_with_size.push((
             Album {
-                id: result.id,
-                name: result.name,
-                description: result.description,
-                date: result.date,
-                num_images: result.num_images.unwrap_or(0) as i32,
-                camera_model: result.camera_model,
-                lens_model: result.lens_model,
-                aperture: result.aperture,
+                id: album_id,
+                name: row.try_get("name")?,
+                description: row.try_get("description")?,
+                date: row.try_get("date")?,
+                num_images: num_images.unwrap_or(0) as i32,
+                camera_model: row.try_get("camera_model")?,
+                lens_model: row.try_get("lens_model")?,
+                aperture: row.try_get("aperture")?,
+                cover_image_id,
             },
-            result.oldest_image,
+            cover_image,
             album_size,
         ));
     }
@@ -189,26 +187,30 @@ pub async fn get_album_with_images(
     album_id: i64,
 ) -> Result<(Album, Vec<Image>), sqlx::Error> {
     // Get the album
-    let album_row = sqlx::query!(
+    let album_row = sqlx::query(
         r#"
-        SELECT id, name, description, date, num_images, camera_model, lens_model, aperture
+        SELECT id, name, description, date, num_images, camera_model, lens_model, aperture, cover_image_id
         FROM albums
         WHERE id = ?
         "#,
-        album_id
     )
+    .bind(album_id)
     .fetch_one(pool)
     .await?;
 
+    let num_images: Option<i64> = album_row.try_get("num_images")?;
+    let cover_image_id: Option<i64> = album_row.try_get("cover_image_id")?;
+
     let album = Album {
-        id: album_row.id,
-        name: album_row.name,
-        description: album_row.description,
-        date: album_row.date,
-        num_images: album_row.num_images.unwrap_or(0) as i32,
-        camera_model: album_row.camera_model,
-        lens_model: album_row.lens_model,
-        aperture: album_row.aperture,
+        id: album_row.try_get("id")?,
+        name: album_row.try_get("name")?,
+        description: album_row.try_get("description")?,
+        date: album_row.try_get("date")?,
+        num_images: num_images.unwrap_or(0) as i32,
+        camera_model: album_row.try_get("camera_model")?,
+        lens_model: album_row.try_get("lens_model")?,
+        aperture: album_row.try_get("aperture")?,
+        cover_image_id,
     };
 
     // Get all images for this album, ordered by date_created (oldest first)
@@ -365,5 +367,26 @@ pub async fn update_album_details(
     .execute(pool)
     .await?;
 
+    Ok(())
+}
+
+pub async fn set_album_cover(
+    pool: &SqlitePool,
+    album_id: i64,
+    cover_image_id: Option<i64>,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE albums SET cover_image_id = ? WHERE id = ?")
+        .bind(cover_image_id)
+        .bind(album_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+pub async fn clear_cover_for_image(pool: &SqlitePool, image_id: i64) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE albums SET cover_image_id = NULL WHERE cover_image_id = ?")
+        .bind(image_id)
+        .execute(pool)
+        .await?;
     Ok(())
 }
