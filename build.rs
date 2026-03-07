@@ -34,6 +34,75 @@ fn run_npm(current_dir: &PathBuf, args: &[&str]) {
     }
 }
 
+fn build_timestamp_utc() -> String {
+    if cfg!(windows) {
+        let out = Command::new("pwsh")
+            .args([
+                "-NoProfile",
+                "-Command",
+                "(Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')",
+            ])
+            .output()
+            .ok()
+            .and_then(|o| {
+                if o.status.success() {
+                    Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                } else {
+                    None
+                }
+            })
+            .filter(|s| !s.is_empty());
+
+        if let Some(s) = out {
+            return s;
+        }
+
+        let out = Command::new("powershell")
+            .args([
+                "-NoProfile",
+                "-Command",
+                "(Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')",
+            ])
+            .output()
+            .ok()
+            .and_then(|o| {
+                if o.status.success() {
+                    Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                } else {
+                    None
+                }
+            })
+            .filter(|s| !s.is_empty());
+
+        if let Some(s) = out {
+            return s;
+        }
+    } else {
+        let out = Command::new("date")
+            .args(["-u", "+%Y-%m-%dT%H:%M:%SZ"])
+            .output()
+            .ok()
+            .and_then(|o| {
+                if o.status.success() {
+                    Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                } else {
+                    None
+                }
+            })
+            .filter(|s| !s.is_empty());
+
+        if let Some(s) = out {
+            return s;
+        }
+    }
+
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .ok()
+        .map(|d| d.as_secs().to_string())
+        .unwrap_or_else(|| "0".to_string())
+}
+
 fn main() {
     println!("cargo:rerun-if-changed=package.json");
     println!("cargo:rerun-if-changed=package-lock.json");
@@ -45,11 +114,7 @@ fn main() {
 
     let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
 
-    let build_timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .ok()
-        .map(|d| d.as_secs().to_string())
-        .unwrap_or_else(|| "0".to_string());
+    let build_timestamp = build_timestamp_utc();
     println!("cargo:rustc-env=BUILD_TIMESTAMP={build_timestamp}");
 
     let git_describe = Command::new("git")
