@@ -155,8 +155,8 @@
       @mousemove="showControls()"
       @keydown.window="showControls(); if (($event.key === 'f' || $event.key === 'F') && !($event.ctrlKey || $event.metaKey || $event.altKey)) { $event.preventDefault(); toggleFullscreen(); }"
       @keydown.window.escape="exitLightbox()"
-      @keydown.window.arrow-left="currentImageIndex > 0 ? currentImageIndex-- : null"
-      @keydown.window.arrow-right="currentImageIndex < images.length - 1 ? currentImageIndex++ : null"
+      @keydown.window.arrow-left="onArrowLeft()"
+      @keydown.window.arrow-right="onArrowRight()"
       @keydown.window.space="slideshowPaused ? resumeSlideshow() : pauseSlideshow()"
       >
       <div
@@ -346,7 +346,7 @@
             x-transition.opacity.duration.150ms
             class="fixed bottom-8 left-1/2 z-50 flex -translate-x-1/2 transform items-center gap-4 rounded-lg border border-white/10 bg-black/40 px-4 py-2 text-white/90 backdrop-blur-md"
           >
-            <button @click.stop="prevSlide" class="text-white p-2">
+            <button @click.stop="prevSlide(false)" class="text-white p-2">
               <i class="fas fa-chevron-left"></i>
             </button>
             <button 
@@ -360,7 +360,7 @@
                 <i class="fas fa-pause"></i>
               </template>
             </button>
-            <button @click.stop="nextSlide" class="text-white p-2">
+            <button @click.stop="nextSlide(false)" class="text-white p-2">
               <i class="fas fa-chevron-right"></i>
             </button>
             <div class="flex items-center text-white">
@@ -421,7 +421,7 @@
         histogramError: "",
         isSlideshow: false,
         slideshowPaused: false,
-        slideshowSpeed: 3,
+        slideshowSpeed: 4,
         slideshowInterval: null,
         showControlsOverlay: true,
         controlTimeout: null,
@@ -460,22 +460,93 @@
 
           this.$watch("currentImageIndex", () => {
             this.resetLightboxZoom();
+            if (this.selectedImage && this.images[this.currentImageIndex]) {
+              this.selectedImage = this.images[this.currentImageIndex].filename;
+              this.replaceUrlForCurrentImage();
+            }
             if (!this.showMetadata) return;
             this.renderHistogram();
           });
+
+          window.addEventListener("popstate", () => {
+            this.syncLightboxWithUrl(true);
+          });
+          this.syncLightboxWithUrl(true);
         },
 
-        // Opens the lightbox (for individual images or slideshow)
-        openLightbox(index) {
+        getUrlPhotoParam() {
+          const url = new URL(window.location.href);
+          return url.searchParams.get("photo");
+        },
+
+        setUrlPhotoParam(filename, method) {
+          const url = new URL(window.location.href);
+          url.searchParams.set("photo", filename);
+          const nextUrl = url.pathname + url.search + url.hash;
+
+          if (method === "push") {
+            const nextState = { ...(history.state || {}), pgLightbox: true };
+            history.pushState(nextState, "", nextUrl);
+            return;
+          }
+
+          history.replaceState(history.state, "", nextUrl);
+        },
+
+        clearUrlPhotoParam() {
+          const url = new URL(window.location.href);
+          if (!url.searchParams.has("photo")) return;
+          url.searchParams.delete("photo");
+          history.replaceState(history.state, "", url.pathname + url.search + url.hash);
+        },
+
+        pushUrlForCurrentImage() {
+          const image = this.images[this.currentImageIndex];
+          if (!image) return;
+          this.setUrlPhotoParam(image.filename, "push");
+        },
+
+        replaceUrlForCurrentImage() {
+          const image = this.images[this.currentImageIndex];
+          if (!image) return;
+          this.setUrlPhotoParam(image.filename, "replace");
+        },
+
+        syncLightboxWithUrl(fromPopstate) {
+          const photo = this.getUrlPhotoParam();
+
+          if (!photo) {
+            if (this.selectedImage) this.exitLightbox(true);
+            return;
+          }
+
+          const index = this.images.findIndex((img) => img && img.filename === photo);
+          if (index === -1) {
+            this.clearUrlPhotoParam();
+            if (this.selectedImage) this.exitLightbox(true);
+            return;
+          }
+
+          if (!this.selectedImage) {
+            this.openLightbox(index, false);
+            if (fromPopstate) this.showControls();
+            return;
+          }
+
+          this.currentImageIndex = index;
+        },
+
+        openLightbox(index, pushHistory = true) {
+          if (!this.images[index]) return;
           this.currentImageIndex = index;
           this.selectedImage = this.images[index].filename;
           this.isSlideshow = false;
           this.resetLightboxZoom();
           document.body.classList.add('overflow-hidden');
+          if (pushHistory) this.pushUrlForCurrentImage();
         },
 
-        // Starts the slideshow from the first image
-        startSlideshow() {
+        startSlideshow(pushHistory = true) {
           if (this.images.length === 0) return;
           this.currentImageIndex = 0;
           this.selectedImage = this.images[0].filename;
@@ -486,13 +557,14 @@
           this.enterFullscreen();
           this.showControls();
           this.startTimer();
+          if (pushHistory) this.pushUrlForCurrentImage();
         },
 
         startTimer() {
           if (this.slideshowInterval) clearInterval(this.slideshowInterval);
           this.slideshowInterval = setInterval(() => {
             if (!this.slideshowPaused) {
-              this.nextSlide();
+              this.nextSlide(true);
             }
           }, this.slideshowSpeed * 1000);
         },
@@ -509,15 +581,38 @@
           this.startTimer();
         },
 
-        nextSlide() {
+        nextSlide(isAuto = false) {
           this.currentImageIndex = (this.currentImageIndex + 1) % this.images.length;
+          if (!isAuto && this.isSlideshow && this.slideshowInterval) this.restartTimer();
         },
 
-        prevSlide() {
+        prevSlide(isAuto = false) {
           this.currentImageIndex = (this.currentImageIndex - 1 + this.images.length) % this.images.length;
+          if (!isAuto && this.isSlideshow && this.slideshowInterval) this.restartTimer();
         },
 
-        exitLightbox() {
+        onArrowLeft() {
+          if (this.isSlideshow) {
+            this.prevSlide(false);
+            return;
+          }
+
+          if (this.currentImageIndex > 0) this.currentImageIndex--;
+        },
+
+        onArrowRight() {
+          if (this.isSlideshow) {
+            this.nextSlide(false);
+            return;
+          }
+
+          if (this.currentImageIndex < this.images.length - 1) this.currentImageIndex++;
+        },
+
+        exitLightbox(fromPopstate = false) {
+          const hadPhotoParam = !!this.getUrlPhotoParam();
+          const openedViaPushState = !!(history.state && history.state.pgLightbox);
+
           if (this.slideshowInterval) {
             clearInterval(this.slideshowInterval);
             this.slideshowInterval = null;
@@ -532,6 +627,16 @@
           this.showMetadata = false;
           this.histogramStatus = "idle";
           this.histogramError = "";
+
+          if (fromPopstate) return;
+          if (!hadPhotoParam) return;
+
+          if (openedViaPushState) {
+            history.back();
+            return;
+          }
+
+          this.clearUrlPhotoParam();
         },
 
         lightboxImageStyle() {
