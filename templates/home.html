@@ -122,7 +122,7 @@
             <div class="shrink-0 bg-black/10">
               <button
                 type="button"
-                class="flex h-11 w-44 items-center justify-between gap-3 px-4 text-left text-sm text-white/90 outline-none hover:bg-white/5 focus:outline-none focus-visible:bg-white/5 sm:w-64"
+                class="flex h-11 w-28 items-center justify-between gap-2 px-2.5 text-left text-sm text-white/90 outline-none hover:bg-white/5 focus:outline-none focus-visible:bg-white/5 sm:w-64 sm:gap-3 sm:px-4"
                 @click="open = !open"
                 :aria-expanded="open.toString()"
                 aria-haspopup="listbox"
@@ -134,7 +134,7 @@
           </div>
 
           <div
-            class="absolute right-0 top-full z-50 mt-2 w-44 overflow-hidden rounded-md border border-emerald-400/20 bg-zinc-950/95 backdrop-blur-xs shadow-2xl sm:w-64"
+            class="absolute right-0 top-full z-50 mt-2 w-28 overflow-hidden rounded-md border border-emerald-400/20 bg-zinc-950/95 backdrop-blur-xs shadow-2xl sm:w-64"
             x-show="open"
             x-transition.opacity
             @click.away="open = false"
