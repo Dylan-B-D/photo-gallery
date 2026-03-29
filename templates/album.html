@@ -150,7 +150,7 @@
     <div 
       class="fixed inset-0 bg-black z-50 flex items-center justify-center"
       @mousemove="showControls()"
-      @keydown.window="showControls(); if (($event.key === 'f' || $event.key === 'F') && !($event.ctrlKey || $event.metaKey || $event.altKey)) { $event.preventDefault(); toggleFullscreen(); }"
+      @keydown.window="showControls(); if (($event.key === 'f' || $event.key === 'F') && !($event.ctrlKey || $event.metaKey || $event.altKey)) { $event.preventDefault(); toggleFullscreen(); } if (($event.key === 'i' || $event.key === 'I') && !($event.ctrlKey || $event.metaKey || $event.altKey)) { $event.preventDefault(); toggleMetadata(); }"
       @keydown.window.escape="exitLightbox()"
       @keydown.window.arrow-left="onArrowLeft()"
       @keydown.window.arrow-right="onArrowRight()"
@@ -167,7 +167,7 @@
       >
         <!-- Main Image (fills viewport) with crossfade -->
         <img 
-          :src="'/uploads/{{ album.id }}/optimized/' + images[currentImageIndex].filename"
+          :src="currentImageSrc()"
           :key="currentImageIndex"
           x-ref="lightboxImage"
           x-transition:enter="transition-opacity duration-700"
@@ -201,6 +201,40 @@
           >
             <i class="fas fa-info-circle"></i>
           </button>
+          <div
+            class="relative"
+            x-data="{ showFullResTooltip: false }"
+            @mouseenter="showFullResTooltip = true"
+            @mouseleave="showFullResTooltip = false"
+            @focusin="showFullResTooltip = true"
+            @focusout="showFullResTooltip = false"
+          >
+            <button
+              @click.stop="fetchCurrentFullRes(true)"
+              :disabled="isCurrentImageFullResReady()"
+              :class="isCurrentImageFullResReady() ? 'text-emerald-300' : 'text-white/90 hover:bg-white/10'"
+              class="inline-flex h-9 w-9 items-center justify-center rounded-md focus:outline-none focus:ring-2 focus:ring-[#34D399] disabled:cursor-default"
+              type="button"
+              aria-label="Load full-resolution image"
+            >
+              <template x-if="isCurrentImageFullResLoading()">
+                <i class="fas fa-spinner fa-spin"></i>
+              </template>
+              <template x-if="!isCurrentImageFullResLoading() && isCurrentImageFullResReady()">
+                <i class="fas fa-check"></i>
+              </template>
+              <template x-if="!isCurrentImageFullResLoading() && !isCurrentImageFullResReady()">
+                <i class="fas fa-image"></i>
+              </template>
+            </button>
+            <div
+              x-show="showFullResTooltip"
+              x-transition.opacity.duration.80ms
+              class="pointer-events-none absolute right-full top-1/2 mr-2 -translate-y-1/2 whitespace-nowrap rounded-md border border-white/10 bg-black/80 px-2 py-1 text-xs text-white/95 backdrop-blur-md"
+            >
+              Load full-resolution image
+            </div>
+          </div>
           <a 
             :href="'/uploads/{{ album.id }}/full/' + images[currentImageIndex].filename" 
             download
@@ -423,6 +457,10 @@
         showControlsOverlay: true,
         controlTimeout: null,
         isFullscreen: false,
+        albumId: "",
+        fullResReady: {},
+        fullResLoading: {},
+        fullResPreloaders: {},
         lightboxZoom: 1,
         lightboxPanX: 0,
         lightboxPanY: 0,
@@ -441,6 +479,7 @@
             console.error('Failed to parse images JSON', e);
             this.images = [];
           }
+          this.albumId = this.$el.dataset.albumId || "";
 
           const syncFullscreenState = () => {
             this.isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
@@ -640,6 +679,75 @@
           return `transform: translate3d(${this.lightboxPanX}px, ${this.lightboxPanY}px, 0) scale(${this.lightboxZoom});`;
         },
 
+        getCurrentImageFilename() {
+          const image = this.images[this.currentImageIndex];
+          return image ? image.filename : null;
+        },
+
+        optimizedImagePath(filename) {
+          return `/uploads/${this.albumId}/optimized/${filename}`;
+        },
+
+        fullImagePath(filename) {
+          return `/uploads/${this.albumId}/full/${filename}`;
+        },
+
+        isFullResReady(filename) {
+          return !!(filename && this.fullResReady[filename]);
+        },
+
+        isFullResLoading(filename) {
+          return !!(filename && this.fullResLoading[filename]);
+        },
+
+        isCurrentImageFullResReady() {
+          return this.isFullResReady(this.getCurrentImageFilename());
+        },
+
+        isCurrentImageFullResLoading() {
+          return this.isFullResLoading(this.getCurrentImageFilename());
+        },
+
+        currentImageSrc() {
+          const filename = this.getCurrentImageFilename();
+          if (!filename) return "";
+          return this.isFullResReady(filename) ? this.fullImagePath(filename) : this.optimizedImagePath(filename);
+        },
+
+        fetchFullResForFilename(filename) {
+          if (!filename) return;
+          if (this.isFullResReady(filename) || this.isFullResLoading(filename)) return;
+
+          const preloader = new Image();
+          this.fullResPreloaders[filename] = preloader;
+          this.fullResLoading = { ...this.fullResLoading, [filename]: true };
+
+          preloader.decoding = "async";
+          preloader.onload = () => {
+            delete this.fullResPreloaders[filename];
+            this.fullResLoading = { ...this.fullResLoading, [filename]: false };
+            this.fullResReady = { ...this.fullResReady, [filename]: true };
+            if (this.getCurrentImageFilename() === filename) {
+              this.$nextTick(() => {
+                this.clampLightboxPan();
+              });
+              if (this.showMetadata) this.renderHistogram();
+            }
+          };
+          preloader.onerror = () => {
+            delete this.fullResPreloaders[filename];
+            this.fullResLoading = { ...this.fullResLoading, [filename]: false };
+          };
+          preloader.src = this.fullImagePath(filename);
+        },
+
+        fetchCurrentFullRes(force = false) {
+          const filename = this.getCurrentImageFilename();
+          if (!filename) return;
+          if (!force && this.lightboxZoom <= 1.02) return;
+          this.fetchFullResForFilename(filename);
+        },
+
         resetLightboxZoom() {
           this.lightboxZoom = 1;
           this.lightboxPanX = 0;
@@ -697,6 +805,7 @@
           this.lightboxPanY = this.lightboxPanY * ratio + py * (1 - ratio);
           this.lightboxZoom = z;
           this.clampLightboxPan();
+          this.fetchCurrentFullRes();
         },
 
         setLightboxZoom(nextZoom) {
