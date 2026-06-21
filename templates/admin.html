@@ -20,6 +20,9 @@
 {% endblock %}
 
 {% block content %}
+<script>
+  window.pgUploadBatchConfig = {{ upload_batch_config_json | safe }};
+</script>
 <div x-data="{ 
   showCreateAlbumForm: false, 
   showEditAlbumForm: false, 
@@ -42,6 +45,8 @@
           images: [],
           loadingImages: false,
           isSubmitting: false,
+          uploadStatus: '',
+          uploadBatchConfig: window.pgUploadBatchConfig,
           coverImageId: null,
           createThumbnail(file) {
             return new Promise((resolve) => {
@@ -191,11 +196,13 @@
                 window.location.hostname === 'localhost' ||
                 window.location.hostname === '127.0.0.1' ||
                 window.location.hostname === '::1';
-              const maxBatchBytes = (isLocal ? 350 : 80) * 1024 * 1024;
-              const maxBatchCount = isLocal ? 120 : 50;
+              const batchConfig = isLocal ? this.uploadBatchConfig.local : this.uploadBatchConfig.public;
+              const maxBatchBytes = batchConfig.max_bytes;
+              const maxBatchCount = batchConfig.max_count;
               const shouldBatch = this.images.length > maxBatchCount || totalBytes > maxBatchBytes;
 
               if (!shouldBatch) {
+                this.uploadStatus = this.images.length > 0 ? 'Uploading images...' : 'Creating album...';
                 const formData = new FormData();
                 formData.append('album', albumBlob);
                 const coverImg =
@@ -245,6 +252,7 @@
 
               const createForm = new FormData();
               createForm.append('album', albumBlob);
+              this.uploadStatus = 'Creating album...';
 
               const createResponse = await fetch('/api/albums', {
                 method: 'POST',
@@ -292,7 +300,9 @@
                 batches.push(currentBatch);
               }
 
-              for (const batch of batches) {
+              for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+                const batch = batches[batchIndex];
+                this.uploadStatus = `Uploading batch ${batchIndex + 1} of ${batches.length}...`;
                 const batchForm = new FormData();
                 if (coverName && coverSize) {
                   batchForm.append('cover_name', coverName);
@@ -338,6 +348,7 @@
               console.error('Error:', error);
               alert(error.message || 'Failed to create album');
             } finally {
+              this.uploadStatus = '';
               this.isSubmitting = false;
             }
           }
@@ -479,7 +490,7 @@
               >
                 <i class="fas fa-cloud-upload-alt text-emerald-400"></i>
                 <span x-show="!isSubmitting">Create Album</span>
-                <span x-show="isSubmitting">Creating...</span>
+                <span x-show="isSubmitting" x-text="uploadStatus || 'Creating...'"></span>
               </button>
             </div>
           </form>
@@ -503,6 +514,8 @@
           deletedImages: [],
           loadingImages: false,
           isSubmitting: false,
+          uploadStatus: '',
+          uploadBatchConfig: window.pgUploadBatchConfig,
           coverImageId: null,
           // Initialize the edit form by fetching data from the backend
           init() {
@@ -686,11 +699,13 @@
                 window.location.hostname === 'localhost' ||
                 window.location.hostname === '127.0.0.1' ||
                 window.location.hostname === '::1';
-              const maxBatchBytes = (isLocal ? 350 : 80) * 1024 * 1024;
-              const maxBatchCount = isLocal ? 120 : 50;
+              const batchConfig = isLocal ? this.uploadBatchConfig.local : this.uploadBatchConfig.public;
+              const maxBatchBytes = batchConfig.max_bytes;
+              const maxBatchCount = batchConfig.max_count;
               const shouldBatch = this.images.length > maxBatchCount || totalBytes > maxBatchBytes;
 
               if (!shouldBatch) {
+                this.uploadStatus = this.images.length > 0 ? 'Uploading images...' : 'Updating album...';
                 const formData = new FormData();
                 formData.append('album', albumBlob);
                 formData.append('deleted_images', this.deletedImages.join(','));
@@ -733,6 +748,7 @@
               const metaForm = new FormData();
               metaForm.append('album', albumBlob);
               metaForm.append('deleted_images', this.deletedImages.join(','));
+              this.uploadStatus = 'Updating album...';
               if (typeof this.coverImageId === 'number') {
                 metaForm.append('cover_image_id', String(this.coverImageId));
               }
@@ -776,7 +792,9 @@
                 batches.push(currentBatch);
               }
 
-              for (const batch of batches) {
+              for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+                const batch = batches[batchIndex];
+                this.uploadStatus = `Uploading batch ${batchIndex + 1} of ${batches.length}...`;
                 const batchForm = new FormData();
                 if (typeof this.coverImageId === 'string') {
                   const coverImg =
@@ -814,6 +832,7 @@
               console.error('Error updating album:', error);
               alert(error.message || 'Failed to update album');
             } finally {
+              this.uploadStatus = '';
               this.isSubmitting = false;
             }
           }
@@ -990,7 +1009,7 @@
               >
                 <i class="fas fa-save text-emerald-400"></i>
                 <span x-show="!isSubmitting">Update Album</span>
-                <span x-show="isSubmitting">Updating...</span>
+                <span x-show="isSubmitting" x-text="uploadStatus || 'Updating...'"></span>
               </button>
             </div>
           </form>

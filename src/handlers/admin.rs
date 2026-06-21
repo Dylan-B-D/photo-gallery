@@ -6,6 +6,7 @@ use axum::{
 };
 use minijinja::context;
 use serde_json::{json, Value};
+use std::future::Future;
 use std::{fs, path::PathBuf, sync::Arc, time::Instant};
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
@@ -15,11 +16,33 @@ use crate::{
     auth::middleware::require_auth,
     db::{self, create_album, update_album_metadata},
     types::{AppState, CreateAlbumRequest},
+    upload_batch::upload_batch_configs_json,
     utils::{
         create_album_directory, delete_album_directory, process_and_save_image, ImageQuality,
         SavedImage,
     },
 };
+
+type HandlerError = Box<dyn std::error::Error + Send + Sync>;
+type ImageTaskResult = Result<SavedImage, HandlerError>;
+
+fn queue_after_permit<T, F, Fut>(
+    join_set: &mut JoinSet<Result<T, HandlerError>>,
+    semaphore: Arc<Semaphore>,
+    work: F,
+) where
+    T: Send + 'static,
+    F: FnOnce() -> Fut + Send + 'static,
+    Fut: Future<Output = Result<T, HandlerError>> + Send + 'static,
+{
+    join_set.spawn(async move {
+        let _permit = semaphore
+            .acquire_owned()
+            .await
+            .map_err(|e| -> HandlerError { Box::new(e) })?;
+        work().await
+    });
+}
 
 pub async fn admin_handler(
     State(state): State<Arc<AppState>>,
@@ -44,7 +67,8 @@ pub async fn admin_handler(
             album_count => album_count,
             image_count => image_count,
             total_storage => (total_storage as f64 / 1024.0 / 1024.0).round(), // Convert to MB
-            albums => albums
+            albums => albums,
+            upload_batch_config_json => upload_batch_configs_json()
         })
         .unwrap();
     Ok(Html(rendered))
@@ -81,8 +105,7 @@ pub async fn create_album_handler(
         .unwrap_or(default_concurrency);
 
     let semaphore = Arc::new(Semaphore::new(concurrency));
-    let mut join_set: JoinSet<Result<SavedImage, Box<dyn std::error::Error + Send + Sync>>> =
-        JoinSet::new();
+    let mut join_set: JoinSet<ImageTaskResult> = JoinSet::new();
 
     let start_multipart = Instant::now();
     let mut album_id: Option<i64> = None;
@@ -149,13 +172,6 @@ pub async fn create_album_handler(
                     None => return (StatusCode::BAD_REQUEST, "Missing album data").into_response(),
                 };
 
-                let permit = match semaphore.clone().acquire_owned().await {
-                    Ok(p) => p,
-                    Err(e) => {
-                        return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
-                    }
-                };
-
                 let original_filename = field
                     .file_name()
                     .map(ToString::to_string)
@@ -170,8 +186,7 @@ pub async fn create_album_handler(
                 }
 
                 let state = state.clone();
-                join_set.spawn(async move {
-                    let _permit = permit;
+                queue_after_permit(&mut join_set, semaphore.clone(), move || async move {
                     let saved = process_and_save_image(
                         state.clone(),
                         current_album_id,
@@ -274,8 +289,7 @@ pub async fn update_album_handler(
         .unwrap_or(default_concurrency);
 
     let semaphore = Arc::new(Semaphore::new(concurrency));
-    let mut join_set: JoinSet<Result<SavedImage, Box<dyn std::error::Error + Send + Sync>>> =
-        JoinSet::new();
+    let mut join_set: JoinSet<ImageTaskResult> = JoinSet::new();
 
     let mut album_data: Option<CreateAlbumRequest> = None;
     let mut deleted_image_ids: Vec<i64> = Vec::new();
@@ -337,13 +351,6 @@ pub async fn update_album_handler(
                 }
             }
             "new_images" => {
-                let permit = match semaphore.clone().acquire_owned().await {
-                    Ok(p) => p,
-                    Err(e) => {
-                        return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
-                    }
-                };
-
                 let original_filename = field
                     .file_name()
                     .map(ToString::to_string)
@@ -358,8 +365,7 @@ pub async fn update_album_handler(
                 }
 
                 let state = state.clone();
-                join_set.spawn(async move {
-                    let _permit = permit;
+                queue_after_permit(&mut join_set, semaphore.clone(), move || async move {
                     let saved = process_and_save_image(
                         state.clone(),
                         album_id,
@@ -579,5 +585,58 @@ pub async fn get_album_handler(
         }))
         .into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use minijinja::{context, path_loader, Environment};
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    #[test]
+    fn admin_template_renders_upload_batch_config() {
+        let mut env = Environment::new();
+        let template_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("templates");
+        env.set_loader(path_loader(&template_path));
+        env.add_global("app_env", "production");
+        env.add_global("asset_version", "test");
+
+        let rendered = env
+            .get_template("admin.html")
+            .expect("admin template exists")
+            .render(context! {
+                album_count => 0,
+                image_count => 0,
+                total_storage => 0.0,
+                albums => Vec::<(crate::types::Album, Option<String>, i64)>::new(),
+                upload_batch_config_json => upload_batch_configs_json()
+            })
+            .expect("admin template renders");
+
+        assert!(rendered.contains("window.pgUploadBatchConfig = {\"local\""));
+        assert!(rendered.contains("\"max_count\":4"));
+    }
+
+    #[tokio::test]
+    async fn queue_after_permit_does_not_wait_before_spawning_work() {
+        let semaphore = Arc::new(Semaphore::new(0));
+        let mut join_set: JoinSet<Result<(), HandlerError>> = JoinSet::new();
+        let work_started = Arc::new(AtomicBool::new(false));
+        let work_started_in_task = work_started.clone();
+
+        queue_after_permit(&mut join_set, semaphore.clone(), move || async move {
+            work_started_in_task.store(true, Ordering::SeqCst);
+            Ok(())
+        });
+
+        assert_eq!(join_set.len(), 1);
+        assert!(!work_started.load(Ordering::SeqCst));
+
+        semaphore.add_permits(1);
+        let result = join_set.join_next().await.expect("queued task completes");
+
+        assert!(result.expect("task joins").is_ok());
+        assert!(work_started.load(Ordering::SeqCst));
     }
 }
