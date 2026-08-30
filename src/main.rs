@@ -42,8 +42,8 @@ async fn main() {
     // Configure rate limiting
     let governor_conf = Arc::new(
         GovernorConfigBuilder::default()
-            .per_second(5) // Allow 2 requests per second
-            .burst_size(10) // Allow a burst of up to 5 requests
+            .per_second(5) // Refill five requests per second
+            .burst_size(10) // Allow an initial burst of ten requests
             .use_headers() // Enable `x-ratelimit-*` headers
             .finish()
             .unwrap(),
@@ -56,13 +56,20 @@ async fn main() {
     let static_router = Router::new().nest_service("/static", ServeDir::new(static_dir));
     let uploads_router = Router::new().nest_service("/uploads", ServeDir::new(uploads_dir));
 
-    // Create the main app router
-    let app = Router::new()
+    // Public pages remain rate limited. Authenticated administration requests are
+    // kept on a separate router so internal multi-request workflows such as album
+    // uploads do not consume the public anti-spam allowance.
+    let public_routes = Router::new()
         .route("/", get(home_handler))
         .route("/login", get(login_handler).post(login_post_handler))
-        .route("/admin", get(admin_handler))
         .route("/albums/{id}", get(album_handler))
         .route("/api/version", get(version_handler))
+        .layer(GovernorLayer {
+            config: governor_conf,
+        });
+
+    let admin_routes = Router::new()
+        .route("/admin", get(admin_handler))
         .route("/api/albums", post(handlers::admin::create_album_handler))
         .route(
             "/api/albums/{id}",
@@ -77,7 +84,11 @@ async fn main() {
             "/api/images/{id}",
             delete(handlers::admin::delete_image_handler),
         )
-        .route("/logout", get(logout_handler))
+        .route("/logout", get(logout_handler));
+
+    // Create the main app router.
+    let app = public_routes
+        .merge(admin_routes)
         .layer(
             CompressionLayer::new()
                 .gzip(true)
@@ -86,9 +97,6 @@ async fn main() {
                 .quality(CompressionLevel::Default),
         )
         .layer(CookieManagerLayer::new())
-        .layer(GovernorLayer {
-            config: governor_conf,
-        })
         .layer(RequestBodyLimitLayer::new(2000 * 1024 * 1024)) // Limit request body size to 2 GB
         .layer(axum::extract::DefaultBodyLimit::max(1024 * 1024 * 1024)) // 1GB limit
         .with_state(state)

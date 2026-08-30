@@ -705,6 +705,7 @@ mod tests {
         assert!(rendered.contains("window.pgUploadBatchConfig = {\"local\""));
         assert!(rendered.contains("\"max_count\":1"));
         assert!(rendered.contains("\"request_timeout_ms\":90000"));
+        assert!(rendered.contains("response.status !== 429"));
     }
 
     #[tokio::test]

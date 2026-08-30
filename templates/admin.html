@@ -24,21 +24,48 @@
   window.pgUploadBatchConfig = {{ upload_batch_config_json | safe }};
 
   window.pgUploadFetch = async (url, options, timeoutMs, description) => {
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+    const maxRateLimitRetries = 5;
 
-    try {
-      return await fetch(url, { ...options, signal: controller.signal });
-    } catch (error) {
-      if (error?.name === 'AbortError') {
-        const seconds = Math.round(timeoutMs / 1000);
-        throw new Error(`${description} timed out after ${seconds} seconds.`);
+    for (let attempt = 0; attempt <= maxRateLimitRetries; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+      try {
+        const response = await fetch(url, { ...options, signal: controller.signal });
+        if (response.status !== 429 || attempt === maxRateLimitRetries) {
+          return response;
+        }
+
+        const retryAfter = response.headers.get('retry-after');
+        const responseText = await response.clone().text();
+        const messageSeconds = responseText.match(/wait\s+for\s+(\d+)s/i)?.[1];
+        let waitMs = Number.parseFloat(retryAfter) * 1000;
+
+        if (!Number.isFinite(waitMs)) {
+          const retryAt = Date.parse(retryAfter || '');
+          waitMs = Number.isFinite(retryAt) ? retryAt - Date.now() : Number(messageSeconds) * 1000;
+        }
+        if (!Number.isFinite(waitMs)) {
+          waitMs = 1000;
+        }
+
+        // Add a small buffer so the retry does not land on the same rate-limit boundary.
+        waitMs = Math.max(1100, waitMs + 100);
+        console.info(`${description} was rate limited; retrying in ${Math.ceil(waitMs / 1000)}s.`);
+        await new Promise(resolve => window.setTimeout(resolve, waitMs));
+      } catch (error) {
+        if (error?.name === 'AbortError') {
+          const seconds = Math.round(timeoutMs / 1000);
+          throw new Error(`${description} timed out after ${seconds} seconds.`);
+        }
+
+        throw new Error(`${description} could not be uploaded: ${error?.message || 'Network error'}`);
+      } finally {
+        window.clearTimeout(timeoutId);
       }
-
-      throw new Error(`${description} could not be uploaded: ${error?.message || 'Network error'}`);
-    } finally {
-      window.clearTimeout(timeoutId);
     }
+
+    throw new Error(`${description} could not be uploaded after repeated rate limiting.`);
   };
 </script>
 <div x-data="{ 
