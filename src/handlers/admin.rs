@@ -7,7 +7,12 @@ use axum::{
 use minijinja::context;
 use serde_json::{json, Value};
 use std::future::Future;
-use std::{fs, path::PathBuf, sync::Arc, time::Instant};
+use std::{
+    fs, io,
+    path::PathBuf,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 use tower_cookies::Cookies;
@@ -42,6 +47,68 @@ fn queue_after_permit<T, F, Fut>(
             .map_err(|e| -> HandlerError { Box::new(e) })?;
         work().await
     });
+}
+
+fn image_process_timeout() -> Duration {
+    let seconds = std::env::var("IMAGE_PROCESS_TIMEOUT_SECS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|seconds| *seconds > 0)
+        .unwrap_or(75);
+
+    Duration::from_secs(seconds)
+}
+
+async fn process_uploaded_image(
+    state: Arc<AppState>,
+    album_id: i64,
+    original_filename: String,
+    file_bytes: Vec<u8>,
+) -> ImageTaskResult {
+    let byte_count = file_bytes.len();
+    let started = Instant::now();
+    tracing::info!(
+        album_id,
+        filename = %original_filename,
+        bytes = byte_count,
+        "processing uploaded image"
+    );
+
+    let process_timeout = image_process_timeout();
+    let result = tokio::time::timeout(
+        process_timeout,
+        process_and_save_image(state, album_id, original_filename.clone(), file_bytes),
+    )
+    .await;
+
+    match result {
+        Ok(Ok(saved)) => {
+            tracing::info!(
+                album_id,
+                filename = %original_filename,
+                elapsed_ms = started.elapsed().as_millis(),
+                "finished processing uploaded image"
+            );
+            Ok(saved)
+        }
+        Ok(Err(error)) => {
+            tracing::error!(
+                album_id,
+                filename = %original_filename,
+                error = %error,
+                "failed to process uploaded image"
+            );
+            Err(error)
+        }
+        Err(_) => {
+            let message = format!(
+                "Timed out processing '{original_filename}' after {} seconds",
+                process_timeout.as_secs()
+            );
+            tracing::error!(album_id, filename = %original_filename, "{message}");
+            Err(Box::new(io::Error::new(io::ErrorKind::TimedOut, message)))
+        }
+    }
 }
 
 pub async fn admin_handler(
@@ -89,12 +156,12 @@ pub async fn create_album_handler(
     let default_concurrency = std::thread::available_parallelism()
         .map(|n| n.get())
         .ok()
-        .and_then(|n| {
+        .map(|n| {
             let app_env = std::env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
             if app_env == "production" {
-                Some(std::cmp::min(6, std::cmp::max(2, n)))
+                n.clamp(2, 6)
             } else {
-                Some(std::cmp::min(8, std::cmp::max(4, n)))
+                n.clamp(4, 8)
             }
         })
         .unwrap_or(2);
@@ -113,7 +180,18 @@ pub async fn create_album_handler(
     let mut cover_name: Option<String> = None;
     let mut cover_size: Option<usize> = None;
 
-    while let Ok(Some(mut field)) = multipart.next_field().await {
+    loop {
+        let field = match multipart.next_field().await {
+            Ok(Some(field)) => field,
+            Ok(None) => break,
+            Err(error) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    format!("Failed to read upload data: {error}"),
+                )
+                    .into_response()
+            }
+        };
         let field_name = field.name().unwrap_or("");
         match field_name {
             "album" => {
@@ -177,24 +255,24 @@ pub async fn create_album_handler(
                     .map(ToString::to_string)
                     .unwrap_or_else(|| "unknown.jpg".to_string());
 
-                let mut file_bytes = Vec::new();
-                while let Ok(Some(chunk)) = field.chunk().await {
-                    file_bytes.extend_from_slice(&chunk);
-                }
+                let file_bytes = match field.bytes().await {
+                    Ok(bytes) => bytes.to_vec(),
+                    Err(error) => {
+                        return (
+                            StatusCode::BAD_REQUEST,
+                            format!("Failed to read '{original_filename}': {error}"),
+                        )
+                            .into_response()
+                    }
+                };
                 if file_bytes.is_empty() {
                     continue;
                 }
 
                 let state = state.clone();
                 queue_after_permit(&mut join_set, semaphore.clone(), move || async move {
-                    let saved = process_and_save_image(
-                        state.clone(),
-                        current_album_id,
-                        original_filename,
-                        file_bytes,
-                    )
-                    .await?;
-                    Ok(saved)
+                    process_uploaded_image(state, current_album_id, original_filename, file_bytes)
+                        .await
                 });
             }
             _ => {}
@@ -273,12 +351,12 @@ pub async fn update_album_handler(
     let default_concurrency = std::thread::available_parallelism()
         .map(|n| n.get())
         .ok()
-        .and_then(|n| {
+        .map(|n| {
             let app_env = std::env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
             if app_env == "production" {
-                Some(std::cmp::min(6, std::cmp::max(2, n)))
+                n.clamp(2, 6)
             } else {
-                Some(std::cmp::min(8, std::cmp::max(4, n)))
+                n.clamp(4, 8)
             }
         })
         .unwrap_or(2);
@@ -297,7 +375,18 @@ pub async fn update_album_handler(
     let mut cover_name: Option<String> = None;
     let mut cover_size: Option<usize> = None;
 
-    while let Ok(Some(mut field)) = multipart.next_field().await {
+    loop {
+        let field = match multipart.next_field().await {
+            Ok(Some(field)) => field,
+            Ok(None) => break,
+            Err(error) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    format!("Failed to read upload data: {error}"),
+                )
+                    .into_response()
+            }
+        };
         let field_name = field.name().unwrap_or("");
         match field_name {
             "album" => {
@@ -356,24 +445,23 @@ pub async fn update_album_handler(
                     .map(ToString::to_string)
                     .unwrap_or_else(|| "unknown.jpg".to_string());
 
-                let mut file_bytes = Vec::new();
-                while let Ok(Some(chunk)) = field.chunk().await {
-                    file_bytes.extend_from_slice(&chunk);
-                }
+                let file_bytes = match field.bytes().await {
+                    Ok(bytes) => bytes.to_vec(),
+                    Err(error) => {
+                        return (
+                            StatusCode::BAD_REQUEST,
+                            format!("Failed to read '{original_filename}': {error}"),
+                        )
+                            .into_response()
+                    }
+                };
                 if file_bytes.is_empty() {
                     continue;
                 }
 
                 let state = state.clone();
                 queue_after_permit(&mut join_set, semaphore.clone(), move || async move {
-                    let saved = process_and_save_image(
-                        state.clone(),
-                        album_id,
-                        original_filename,
-                        file_bytes,
-                    )
-                    .await?;
-                    Ok(saved)
+                    process_uploaded_image(state, album_id, original_filename, file_bytes).await
                 });
             }
             _ => {}
@@ -615,7 +703,8 @@ mod tests {
             .expect("admin template renders");
 
         assert!(rendered.contains("window.pgUploadBatchConfig = {\"local\""));
-        assert!(rendered.contains("\"max_count\":4"));
+        assert!(rendered.contains("\"max_count\":1"));
+        assert!(rendered.contains("\"request_timeout_ms\":90000"));
     }
 
     #[tokio::test]

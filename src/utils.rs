@@ -18,9 +18,11 @@ fn uploads_base_dir() -> PathBuf {
 }
 
 pub struct ProcessedImage {
+    pub full: Vec<u8>,
     pub optimized: Vec<u8>,
     pub thumbnail: Vec<u8>,
     pub original_size: usize,
+    pub metadata: ExifMetadata,
 }
 
 pub struct SavedImage {
@@ -181,6 +183,12 @@ pub async fn process_image(data: Vec<u8>) -> Result<ProcessedImage, Box<dyn Erro
         .clamp(1, 100);
 
     task::spawn_blocking(move || {
+        let original_size = data.len();
+
+        // EXIF parsing can be expensive or pathological for a malformed image, so
+        // keep it off Tokio's async worker threads with the rest of the CPU work.
+        let metadata = extract_exif_metadata(&data).unwrap_or_else(ExifMetadata::unknown);
+
         // Decompress JPEG to RGB image
         let rgb_image: RgbImage = turbojpeg::decompress_image(&data)?;
         let width = rgb_image.width();
@@ -227,9 +235,11 @@ pub async fn process_image(data: Vec<u8>) -> Result<ProcessedImage, Box<dyn Erro
         )?;
 
         Ok(ProcessedImage {
+            full: data,
             optimized: optimized.to_vec(),
             thumbnail: thumbnail.to_vec(),
-            original_size: data.len(),
+            original_size,
+            metadata,
         })
     })
     .await?
@@ -269,12 +279,11 @@ pub async fn process_and_save_image(
     let original_size = data.len();
     let filename = generate_unique_filename(&original_filename);
 
-    let metadata = extract_exif_metadata(&data).unwrap_or_else(ExifMetadata::unknown);
-
-    save_image(&data, &filename, album_id, ImageQuality::Full).await?;
-
     let processed = process_image(data).await?;
 
+    // Do not write anything until decoding and resizing has completed. If a bad
+    // image times out or fails, this avoids leaving an orphaned full-size file.
+    let save_full = save_image(&processed.full, &filename, album_id, ImageQuality::Full);
     let save_optimized = save_image(
         &processed.optimized,
         &filename,
@@ -287,7 +296,7 @@ pub async fn process_and_save_image(
         album_id,
         ImageQuality::Thumbnail,
     );
-    tokio::try_join!(save_optimized, save_thumbnail)?;
+    tokio::try_join!(save_full, save_optimized, save_thumbnail)?;
 
     let image_id = create_image(
         &state.pool,
@@ -295,15 +304,15 @@ pub async fn process_and_save_image(
             album_id,
             filename: &filename,
             file_size: processed.original_size as i64,
-            camera_make: &metadata.camera_make,
-            camera_model: &metadata.camera_model,
-            lens_model: &metadata.lens_model,
-            iso: &metadata.iso,
-            aperture: &metadata.aperture,
-            shutter_speed: &metadata.shutter_speed,
-            focal_length: &metadata.focal_length,
-            light_source: &metadata.light_source,
-            date_created: &metadata.date_created,
+            camera_make: &processed.metadata.camera_make,
+            camera_model: &processed.metadata.camera_model,
+            lens_model: &processed.metadata.lens_model,
+            iso: &processed.metadata.iso,
+            aperture: &processed.metadata.aperture,
+            shutter_speed: &processed.metadata.shutter_speed,
+            focal_length: &processed.metadata.focal_length,
+            light_source: &processed.metadata.light_source,
+            date_created: &processed.metadata.date_created,
         },
     )
     .await?;
@@ -313,4 +322,28 @@ pub async fn process_and_save_image(
         original_filename,
         original_size,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use image::Rgb;
+
+    #[tokio::test]
+    async fn processing_preserves_the_original_and_creates_both_derivatives() {
+        let source = RgbImage::from_pixel(8, 4, Rgb([32, 128, 224]));
+        let mut jpeg = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new(&mut jpeg)
+            .encode_image(&source)
+            .expect("test JPEG encodes");
+
+        let processed = process_image(jpeg.clone())
+            .await
+            .expect("test JPEG processes");
+
+        assert_eq!(processed.full, jpeg);
+        assert_eq!(processed.original_size, processed.full.len());
+        assert!(!processed.optimized.is_empty());
+        assert!(!processed.thumbnail.is_empty());
+    }
 }

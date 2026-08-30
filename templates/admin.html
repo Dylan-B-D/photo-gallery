@@ -22,6 +22,24 @@
 {% block content %}
 <script>
   window.pgUploadBatchConfig = {{ upload_batch_config_json | safe }};
+
+  window.pgUploadFetch = async (url, options, timeoutMs, description) => {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      return await fetch(url, { ...options, signal: controller.signal });
+    } catch (error) {
+      if (error?.name === 'AbortError') {
+        const seconds = Math.round(timeoutMs / 1000);
+        throw new Error(`${description} timed out after ${seconds} seconds.`);
+      }
+
+      throw new Error(`${description} could not be uploaded: ${error?.message || 'Network error'}`);
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+  };
 </script>
 <div x-data="{ 
   showCreateAlbumForm: false, 
@@ -215,17 +233,25 @@
                   formData.append('images', img.file, img.name);
                 });
 
-                const response = await fetch('/api/albums', {
-                  method: 'POST',
-                  body: formData,
-                });
+                const uploadDescription = this.images.length === 1
+                  ? `Image '${this.images[0].name}'`
+                  : `Album upload (${this.images.length} images)`;
+                const response = await window.pgUploadFetch(
+                  '/api/albums',
+                  {
+                    method: 'POST',
+                    body: formData,
+                  },
+                  batchConfig.request_timeout_ms,
+                  uploadDescription
+                );
 
                 if (!response.ok) {
                   if (response.status === 413) {
                     throw new Error('Upload too large. Try fewer images per upload.');
                   }
                   const text = await response.text();
-                  throw new Error(text || 'Failed to create album');
+                  throw new Error(`${uploadDescription} failed: ${text || `HTTP ${response.status}`}`);
                 }
 
                 const data = await response.json();
@@ -254,10 +280,15 @@
               createForm.append('album', albumBlob);
               this.uploadStatus = 'Creating album...';
 
-              const createResponse = await fetch('/api/albums', {
-                method: 'POST',
-                body: createForm,
-              });
+              const createResponse = await window.pgUploadFetch(
+                '/api/albums',
+                {
+                  method: 'POST',
+                  body: createForm,
+                },
+                batchConfig.request_timeout_ms,
+                'Album creation'
+              );
 
               if (!createResponse.ok) {
                 if (createResponse.status === 413) {
@@ -302,7 +333,9 @@
 
               for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
                 const batch = batches[batchIndex];
-                this.uploadStatus = `Uploading batch ${batchIndex + 1} of ${batches.length}...`;
+                const batchNames = batch.map(img => img.name).join(', ');
+                const batchDescription = `Batch ${batchIndex + 1} of ${batches.length} (${batchNames})`;
+                this.uploadStatus = `Uploading ${batchIndex + 1}/${batches.length}: ${batchNames}`;
                 const batchForm = new FormData();
                 if (coverName && coverSize) {
                   batchForm.append('cover_name', coverName);
@@ -310,22 +343,27 @@
                 }
                 batch.forEach(img => batchForm.append('new_images', img.file, img.name));
 
-                const batchResponse = await fetch(`/api/albums/${albumId}`, {
-                  method: 'PUT',
-                  body: batchForm,
-                });
+                const batchResponse = await window.pgUploadFetch(
+                  `/api/albums/${albumId}`,
+                  {
+                    method: 'PUT',
+                    body: batchForm,
+                  },
+                  batchConfig.request_timeout_ms,
+                  batchDescription
+                );
 
                 if (!batchResponse.ok) {
                   if (batchResponse.status === 413) {
                     throw new Error('Upload too large. Try fewer images per upload.');
                   }
                   const text = await batchResponse.text();
-                  throw new Error(text || 'Failed to upload images');
+                  throw new Error(`${batchDescription} failed: ${text || `HTTP ${batchResponse.status}`}`);
                 }
 
                 const batchResult = await batchResponse.json();
                 if (batchResult.status !== 'success') {
-                  throw new Error(batchResult.message || 'Failed to upload images');
+                  throw new Error(`${batchDescription} failed: ${batchResult.message || 'Unknown server error'}`);
                 }
 
                 imagesProcessed += batchResult.new_images_added || 0;
@@ -721,17 +759,25 @@
                 }
                 this.images.forEach(img => formData.append('new_images', img.file, img.name));
 
-                const response = await fetch(`/api/albums/${this.albumId}`, {
-                  method: 'PUT',
-                  body: formData,
-                });
+                const uploadDescription = this.images.length === 1
+                  ? `Image '${this.images[0].name}'`
+                  : `Album update (${this.images.length} new images)`;
+                const response = await window.pgUploadFetch(
+                  `/api/albums/${this.albumId}`,
+                  {
+                    method: 'PUT',
+                    body: formData,
+                  },
+                  batchConfig.request_timeout_ms,
+                  uploadDescription
+                );
 
                 if (!response.ok) {
                   if (response.status === 413) {
                     throw new Error('Upload too large. Try fewer images per upload.');
                   }
                   const text = await response.text();
-                  throw new Error(text || 'Failed to update album');
+                  throw new Error(`${uploadDescription} failed: ${text || `HTTP ${response.status}`}`);
                 }
 
                 const data = await response.json();
@@ -753,10 +799,15 @@
                 metaForm.append('cover_image_id', String(this.coverImageId));
               }
 
-              const metaResponse = await fetch(`/api/albums/${this.albumId}`, {
-                method: 'PUT',
-                body: metaForm,
-              });
+              const metaResponse = await window.pgUploadFetch(
+                `/api/albums/${this.albumId}`,
+                {
+                  method: 'PUT',
+                  body: metaForm,
+                },
+                batchConfig.request_timeout_ms,
+                'Album update'
+              );
 
               if (!metaResponse.ok) {
                 if (metaResponse.status === 413) {
@@ -794,7 +845,9 @@
 
               for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
                 const batch = batches[batchIndex];
-                this.uploadStatus = `Uploading batch ${batchIndex + 1} of ${batches.length}...`;
+                const batchNames = batch.map(img => img.name).join(', ');
+                const batchDescription = `Batch ${batchIndex + 1} of ${batches.length} (${batchNames})`;
+                this.uploadStatus = `Uploading ${batchIndex + 1}/${batches.length}: ${batchNames}`;
                 const batchForm = new FormData();
                 if (typeof this.coverImageId === 'string') {
                   const coverImg =
@@ -806,22 +859,27 @@
                 }
                 batch.forEach(img => batchForm.append('new_images', img.file, img.name));
 
-                const batchResponse = await fetch(`/api/albums/${this.albumId}`, {
-                  method: 'PUT',
-                  body: batchForm,
-                });
+                const batchResponse = await window.pgUploadFetch(
+                  `/api/albums/${this.albumId}`,
+                  {
+                    method: 'PUT',
+                    body: batchForm,
+                  },
+                  batchConfig.request_timeout_ms,
+                  batchDescription
+                );
 
                 if (!batchResponse.ok) {
                   if (batchResponse.status === 413) {
                     throw new Error('Upload too large. Try fewer images per upload.');
                   }
                   const text = await batchResponse.text();
-                  throw new Error(text || 'Failed to upload images');
+                  throw new Error(`${batchDescription} failed: ${text || `HTTP ${batchResponse.status}`}`);
                 }
 
                 const batchResult = await batchResponse.json();
                 if (batchResult.status !== 'success') {
-                  throw new Error(batchResult.message || 'Failed to upload images');
+                  throw new Error(`${batchDescription} failed: ${batchResult.message || 'Unknown server error'}`);
                 }
               }
 
